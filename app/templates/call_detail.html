@@ -1,0 +1,189 @@
+{% extends "_base.html" %}
+{% block title %}Conversation {{ log.call_sid }}{% endblock %}
+
+{% macro ms(v) %}{{ ('%.0f ms' % v) if v is number else '—' }}{% endmacro %}
+{% macro latbadge(value) %}<span class="badge {% if value is not number %}neutral{% elif value > 5000 %}crit{% elif value > 2000 %}warn{% else %}ok{% endif %}">{{ ('%.0f ms' % value) if value is number else '—' }}</span>{% endmacro %}
+{% macro respbadge(value) %}<span class="badge {% if value is not number %}neutral{% elif value > 1500 %}crit{% elif value > 800 %}warn{% else %}ok{% endif %}">{{ ('%.0f ms' % value) if value is number else '—' }}</span>{% endmacro %}
+{% macro chip(label, value, warn=2000, crit=5000) %}<span class="chip {% if value is number and value > crit %}crit{% elif value is number and value > warn %}warn{% endif %}">{{ label }} <b>{{ ('%.0f' % value) if value is number else '—' }}</b></span>{% endmacro %}
+
+{% block content %}
+  <h1>Conversation <code>{{ log.call_sid }}</code></h1>
+  <div class="muted">{{ log.created_at }} · stream <code>{{ log.stream_sid }}</code>
+    {% if log.get('error') %}· <span class="err">error: {{ log.error }}</span>{% endif %}</div>
+
+  <div class="cards">
+    <div class="card"><div class="lbl">Turns</div><div class="val">{{ turn_records | length }}</div></div>
+    <div class="card hero">
+      <div class="lbl">Responsiveness · median</div>
+      <div class="big">{{ respbadge(latency.responsiveness.median) }}</div>
+      <div class="sub">avg {{ ms(latency.responsiveness.avg) }} · p95 {{ ms(latency.responsiveness.p95) }} · max {{ ms(latency.responsiveness.max) }}</div>
+      <div class="cap">turn release → first audio · server timing</div>
+    </div>
+    <div class="card">
+      <div class="lbl">Total · median</div>
+      <div class="big">{{ latbadge(latency.total.median) }}</div>
+      <div class="sub">avg {{ ms(latency.total.avg) }} · p95 {{ ms(latency.total.p95) }} · max {{ ms(latency.total.max) }}</div>
+      <div class="cap">true silence → audio · incl. endpointing</div>
+    </div>
+    <div class="card"><div class="lbl">Greeting source</div><div class="val">{{ log.get('metrics', {}).get('greeting_text_source', '—') }}</div></div>
+  </div>
+  <p class="muted">Latency over <b>{{ latency.responsiveness.n }}</b> of {{ turn_records | length }} timed turns.
+    <b style="color:var(--fg)">Responsiveness</b> is the server response delay from turn release to the bot's first audio; it excludes the endpointing window (the system confirming you stopped) and any mid-thought pause on a merged turn.
+    <b style="color:var(--fg)">Total</b> is the VAD-anchored physical wait from true silence. Both measure server events, not actual browser-speaker playback.</p>
+
+  {% if eager_summary %}
+  <div class="panel">
+    <h2>EagerEOT speculative probe <span class="muted">(Stage-1 measurement — opportunity estimate, not realized saving)</span></h2>
+    <div class="cards">
+      <div class="card"><div class="lbl">EagerEOT turns</div><div class="val">{{ eager_summary.eager_eot_turns }} / {{ eager_summary.total_turns }}</div></div>
+      <div class="card"><div class="lbl">Eligible</div><div class="val">{{ eager_summary.eligible_turns }}</div></div>
+      <div class="card"><div class="lbl">TurnResumed</div><div class="val">{{ '%.0f%%' % (eager_summary.turn_resumed_rate * 100) }}</div></div>
+      <div class="card"><div class="lbl">Eager/final match</div><div class="val">{{ '%.0f%%' % (eager_summary.eager_final_match_rate * 100) }}</div></div>
+      <div class="card"><div class="lbl">Median head start</div><div class="val">{{ ms(eager_summary.median_head_start_ms) }}</div></div>
+      <div class="card"><div class="lbl">Median est. saved</div><div class="val">{{ ms(eager_summary.median_estimated_saved_ms) }}</div></div>
+    </div>
+  </div>
+
+  {% if eager_summary.speculation_on %}
+  <div class="panel">
+    <h2>Speculative LLM <span class="muted">— draft starts on EagerEOT, released at EndOfTurn on match</span></h2>
+    <div class="cards">
+      <div class="card"><div class="lbl">Drafts started</div><div class="val">{{ eager_summary.draft_start_count }}</div></div>
+      <div class="card"><div class="lbl">Released (used)</div><div class="val">{{ eager_summary.draft_release_count }}</div></div>
+      <div class="card"><div class="lbl">Cancelled</div><div class="val">{{ eager_summary.draft_cancel_count }}</div></div>
+      <div class="card"><div class="lbl">Use rate</div><div class="val">{{ '%.0f%%' % (eager_summary.draft_use_rate * 100) }}</div></div>
+      <div class="card"><div class="lbl">Extra-call rate</div><div class="val">{{ '%.0f%%' % (eager_summary.additional_llm_call_rate * 100) }}</div></div>
+      <div class="card"><div class="lbl">Empirical saved</div><div class="val">{{ ms(eager_summary.empirical_saved_ms_population) }}</div></div>
+    </div>
+    <p class="muted">“Empirical saved” = median(last-word→audio) on normal turns − on released turns — a real end-to-end comparison (“—” when every turn was released, so there is no normal baseline).</p>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  {% if memory_summary %}
+  <div class="panel">
+    <h2>Memory <span class="muted">— what the agent recalled / had available per turn</span></h2>
+    <div class="cards">
+      <div class="card"><div class="lbl">Turns with memory</div><div class="val">{{ memory_summary.memory_turns }} / {{ memory_summary.total_turns }}</div></div>
+      <div class="card"><div class="lbl">Recall used</div><div class="val">{{ memory_summary.recall_used_turns }} <span class="muted">({{ '%.0f%%' % (memory_summary.recall_use_rate * 100) }})</span></div></div>
+      <div class="card"><div class="lbl">Explicit asks</div><div class="val">{{ memory_summary.recall_triggered_turns }}</div></div>
+      <div class="card"><div class="lbl">Snippets injected</div><div class="val">{{ memory_summary.total_recall_snippets }}</div></div>
+      <div class="card"><div class="lbl">Median ctx msgs</div><div class="val">{{ '%.0f' % memory_summary.median_context_messages if memory_summary.median_context_messages is number else '—' }}</div></div>
+      <div class="card"><div class="lbl">Median ~tokens</div><div class="val">{{ '%.0f' % memory_summary.median_approx_memory_tokens if memory_summary.median_approx_memory_tokens is number else '—' }}</div></div>
+    </div>
+    <p class="muted">“Recall used” means query-relevant earlier context was <em>injected</em> into the prompt — an opportunity signal, not proof the LLM relied on it. “~tokens” is a char/4 estimate, not provider token usage.</p>
+  </div>
+  {% endif %}
+
+  <div class="panel">
+    <h2>Greeting</h2>
+    <pre>{% for ev in log.get('transcript', []) %}{% if ev.phase == 'greeting' %}{{ ev.text }}{% endif %}{% endfor %}</pre>
+  </div>
+
+  <h2>Turns</h2>
+  <div class="panel" style="padding:.4rem .2rem;">
+  <table>
+    <thead><tr>
+      <th>#</th><th>User said</th><th>Bot said</th><th>Lang</th>
+      <th>Latency</th><th>Barge-in?</th><th>Error</th>
+    </tr></thead>
+    <tbody>
+    {% for r in turn_records %}
+      <tr>
+        <td>{{ r.turn_id }}{% if r.merged_user_turn_ids %}<br><span class="muted">merged {{ r.merged_user_turn_ids | join(', ') }}</span>{% endif %}</td>
+        <td class="wrap-text">{{ r.user_text }}</td>
+        <td class="wrap-text">{{ r.assistant_text }}</td>
+        <td><span class="muted">{{ r.detected_language or '—' }} → </span>{{ r.response_language or '—' }}</td>
+        <td class="twoline">
+          {% set resp = r.latest_user_stop_to_first_audio_ms if r.latest_user_stop_to_first_audio_ms is number else r.primary_latency_ms %}
+          <div class="big">{{ respbadge(resp) }}</div>
+          <div class="sub">total {{ ms(r.primary_latency_ms) }}{% if r.primary_latency_anchor %} · {{ r.primary_latency_anchor }}{% endif %}</div>
+        </td>
+        <td>{% if r.bot_was_speaking_when_user_stopped %}<span class="badge warn">barge-in</span>{% else %}<span class="muted">no</span>{% endif %}</td>
+        <td>{% if r.error_stage %}<span class="badge crit" title="{{ r.error_message or '' }}">{{ r.error_stage }}</span>{% endif %}</td>
+      </tr>
+      <tr>
+        <td></td>
+        <td colspan="6" style="border-bottom:1px solid var(--border);">
+          <div class="tdetail">
+            <div class="gline">
+              <span class="glabel">Pipeline</span>
+              {{ chip('User→EOT', r.user_stop_to_eot_ms, warn=400, crit=1000) }}
+              {{ chip('EOT→Commit', r.eot_to_turn_committed_ms, warn=200, crit=800) }}
+              {% if r.merged_user_turn_ids %}
+                {{ chip('earliest Commit→LLM', r.turn_committed_to_llm_start_ms) }}
+                {{ chip('latest Commit→LLM', r.latest_turn_committed_to_llm_start_ms) }}
+              {% else %}
+                {{ chip('Commit→LLM', r.turn_committed_to_llm_start_ms) }}
+              {% endif %}
+              {{ chip('LLM TTFB', r.llm_ttfb_ms, warn=1200, crit=3000) }}
+              {{ chip('LLM total', r.llm_total_ms, warn=1500, crit=4000) }}
+              {% if r.llm_end_to_tts_start_ms is number and r.llm_end_to_tts_start_ms <= 0 %}
+                <span class="chip" title="TTS began before the LLM end frame — healthy streaming overlap">LLM→TTS <b>overlap {{ '%.0f' % (-r.llm_end_to_tts_start_ms) }}</b></span>
+              {% else %}
+                {{ chip('LLM→TTS', r.llm_end_to_tts_start_ms, warn=300, crit=1000) }}
+              {% endif %}
+              {{ chip('TTS first', r.tts_first_audio_ms, warn=400, crit=1000) }}
+              {{ chip('Memory gov', r.memory_processor_duration_ms, warn=50, crit=200) }}
+            </div>
+
+            {% if r.merged_user_turn_ids %}
+            <div class="gline">
+              <span class="glabel">Merged</span>
+              {{ chip('earliest→audio', r.earliest_user_stop_to_first_audio_ms) }}
+              {{ chip('latest→audio', r.latest_user_stop_to_first_audio_ms) }}
+              {% for t in r.merged_user_texts %}<span class="chip">{{ loop.index }}: {{ t }}</span>{% endfor %}
+            </div>
+            {% endif %}
+
+            {% if r.eager_probe %}
+              {% set ep = r.eager_probe %}
+              {% set vc = 'ok' if ep.verdict == 'eligible' else ('warn' if ep.verdict in ['wasted_turn_resumed', 'discarded_transcript_mismatch', 'missing_final_transcript'] else 'neutral') %}
+              <div class="gline alt">
+                <span class="glabel">Spec</span>
+                <span class="chip">EagerEOT {{ 'yes' if ep.eager_eot_seen else 'no' }}</span>
+                <span class="chip">head start <b>{{ ms(ep.head_start_ms) }}</b></span>
+                <span class="chip">match {% if ep.eager_final_match is none %}—{% else %}{{ 'yes' if ep.eager_final_match else 'no' }}{% endif %}</span>
+                <span class="chip">est. saved <b>{{ ms(ep.estimated_saved_ms) }}</b></span>
+                <span class="badge {{ vc }}">{{ ep.verdict }}</span>
+                {% if ep.draft_started %}<span class="chip">draft {% if ep.draft_released %}released{% elif ep.draft_cancelled %}cancelled{% elif ep.draft_error %}error{% else %}started{% endif %}</span>{% endif %}
+              </div>
+            {% endif %}
+
+            {% if r.memory %}
+              {% set m = r.memory %}
+              <div class="gline alt">
+                <span class="glabel">Memory</span>
+                <span class="badge {{ 'ok' if m.recall_used else 'neutral' }}">recall {{ 'yes' if m.recall_used else 'no' }}</span>
+                {% if m.recall_triggered %}<span class="chip">explicit ask</span>{% endif %}
+                <span class="chip">pinned <b>{{ m.get('pinned_facts_count', 0) }}</b></span>
+                <span class="chip">snippets <b>{{ m.get('recall_snippets', []) | length }}</b></span>
+                <span class="chip">summary {{ 'yes' if m.running_summary_present else 'no' }}</span>
+                <span class="chip">ctx msgs <b>{{ m.get('context_message_count', '—') }}</b></span>
+                <span class="chip">~tokens <b>{{ m.get('approx_memory_tokens', '—') }}</b></span>
+                {% if m.recall_source_turns %}<span class="chip">from turns {{ m.recall_source_turns | join(', ') }}</span>{% endif %}
+              </div>
+              {% if m.recall_snippets %}{% for s in m.recall_snippets %}<div class="quote">• {{ s }}</div>{% endfor %}{% endif %}
+            {% endif %}
+
+            {% if r.stt_ready_before_user_turn is defined and r.stt_ready_before_user_turn is not none and not r.stt_ready_before_user_turn %}
+              <div class="gline"><span class="glabel"></span><span class="chip crit">STT not ready before turn</span></div>
+            {% endif %}
+            {% if r.error_stage %}
+              <div class="gline"><span class="glabel">Error</span><span class="err">{{ r.error_stage }}: {{ r.error_message or '' }}</span></div>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7"><div class="empty">No turn records.</div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <div class="panel">
+    <h2>Effective config snapshot</h2>
+    <pre>{{ log.get('config_snapshot', {}).get('runtime_config', {}) | tojson(indent=2) }}</pre>
+  </div>
+{% endblock %}

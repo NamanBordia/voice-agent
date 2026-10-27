@@ -1,0 +1,40 @@
+{% extends "_base.html" %}
+{% block title %}Voice Agent — Conversations{% endblock %}
+{% block content %}
+  <h1>Conversations</h1>
+  {% if not db_connected %}<div class="status err">Database not connected — cannot list calls.</div>{% endif %}
+
+  <p class="muted" style="margin:.2rem 0 1rem;">
+    <b style="color:var(--fg)">Responsiveness</b> = median server time from turn release to the bot's first audio.
+    <b style="color:var(--fg)">Total</b> = median including the speech endpointing window.
+    Both are server-side proxies, not browser-speaker playback.
+  </p>
+
+  <div class="panel" style="padding:.4rem .2rem;">
+  <table>
+    <thead><tr>
+      <th>Conversation</th><th>Status</th><th>Turns</th>
+      <th>Responsiveness</th><th>Total</th><th>Greeting</th><th>Created</th>
+    </tr></thead>
+    <tbody>
+    {% for log in logs %}
+      <tr>
+        <td><a href="/calls/{{ log.call_sid }}"><code>{{ log.call_sid }}</code></a></td>
+        <td>
+          {% set oc = log.get('conversation_outcome', '—') %}
+          {% set ocls = {'completed':'ok','user_disconnected':'neutral','no_user_turns':'warn','greeting_failed':'warn','pipeline_error':'crit'}.get(oc, 'neutral') %}
+          <span class="badge {{ ocls }}">{{ oc }}</span>
+        </td>
+        <td>{{ log.turn_count }}{% if log.measured_latency_turns is not none and log.measured_latency_turns < log.turn_count %} <span class="muted">({{ log.measured_latency_turns }} timed)</span>{% endif %}</td>
+        <td>{% if log.resp_ms is not none %}<span class="badge {{ log.resp_badge }}">{{ '%.0f ms' % log.resp_ms }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td>{% if log.total_ms is not none %}<span class="muted">{{ '%.0f ms' % log.total_ms }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td><span class="muted">{{ log.get('metrics', {}).get('greeting_text_source', '—') }}</span></td>
+        <td class="muted">{{ log.created_at }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7"><div class="empty">{% if db_connected %}No conversations yet. Open Talk to start.{% else %}History storage is unavailable.{% endif %}</div></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+{% endblock %}

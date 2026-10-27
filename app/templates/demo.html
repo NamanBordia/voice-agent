@@ -1,0 +1,66 @@
+{% extends "_base.html" %}
+{% block title %}Voice Agent — Talk{% endblock %}
+{% block head %}
+<script type="module" src="/static/demo.js"></script>
+<link rel="stylesheet" href="/static/talk.css" />
+{% endblock %}
+{% block content %}
+<main id="conversation" class="demo" data-state="idle" aria-labelledby="talk-title">
+  <header class="demo-header">
+    <div class="demo-heading">
+      <p class="eyebrow">VOICE AGENT</p>
+      <h1 id="talk-title">Let’s talk.</h1>
+      <p class="demo-description">A little space for a conversation. Speak in English or Hindi.</p>
+    </div>
+    <a class="settings-link" href="/config">Voice &amp; settings <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <div class="conversation-panel">
+    <div class="conversation-status">
+      <p class="status-label" role="status" aria-live="polite">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="status">Ready when you are.</span>
+      </p>
+      <div class="mic-activity">
+        <span aria-hidden="true">Mic activity</span>
+        <meter id="mic-level" min="0" max="1" value="0" aria-label="Microphone activity"></meter>
+      </div>
+    </div>
+
+    <section id="transcript" class="transcript" aria-label="Conversation transcript" aria-live="polite" tabindex="0">
+      <div id="empty" class="conversation-empty">
+        <div class="empty-icon" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="2" width="6" height="12" rx="3" />
+            <path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" />
+          </svg>
+        </div>
+        <h2>Start a conversation</h2>
+        <p>Press Start conversation, let the agent say hello,<br class="empty-break" /> then speak naturally. Your words will appear here.</p>
+      </div>
+    </section>
+
+    <footer class="conversation-footer">
+      <div class="conversation-notices">
+        <p id="error" class="status err" role="alert" hidden></p>
+        <div class="recovery-actions">
+          <button id="audio-enable" class="recovery-button" type="button" hidden>Enable audio</button>
+          <button id="retry-save" class="recovery-button" type="button" hidden>Retry saving</button>
+          <p id="history" hidden><a id="history-link">View saved conversation <span aria-hidden="true">↗</span></a></p>
+        </div>
+      </div>
+      <div class="controls" role="group" aria-label="Conversation controls">
+        <button id="start" class="start-button" type="button">Start conversation</button>
+        <button id="mute" class="mute-button" type="button" disabled aria-pressed="false">Mute</button>
+        <button id="end" class="end-button" type="button" disabled>End</button>
+      </div>
+      <div class="conversation-meta">
+        <p class="listening-hint">The agent listens after its greeting and between replies.</p>
+        <p id="input-device" class="input-device"></p>
+      </div>
+    </footer>
+  </div>
+  <p class="headphone-hint">Headphones can help reduce speaker echo.</p>
+  <audio id="bot-audio" autoplay playsinline></audio>
+</main>
+{% endblock %}
