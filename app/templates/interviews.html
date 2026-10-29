@@ -1,0 +1,56 @@
+{% extends "_base.html" %}
+{% block title %}Interview setup and reports{% endblock %}
+{% block head %}<script type="module" src="/static/recruiter.js"></script>
+<style>#report-summary .summary-table { overflow-x:auto; } #report-summary td { min-width:150px; } #report-summary td:last-child { min-width:260px; } #report-summary li { margin-bottom:.5rem; }</style>{% endblock %}
+{% block content %}
+<h1>Interview workspace</h1>
+<p>Recruiter management is restricted to this computer. Candidate tokens allow participation only.</p>
+<p id="workspace-status" role="status"></p>
+<div class="row"><div>
+<form id="job-form" class="panel">
+  <h2>1. Role and interview details</h2>
+  <label>Job title<input name="title" required maxlength="200"></label>
+  <label>Job description and responsibilities<textarea name="description" required maxlength="20000"></textarea></label>
+  <label>Required skills (one per line)<textarea name="skills" required></textarea></label>
+  <label>Experience level<input name="experience" required placeholder="For example: 2–4 years"></label>
+  <div class="row"><div><label>Duration in minutes<input name="duration_minutes" type="number" min="5" max="90" value="20" required></label></div>
+  <div><label>Language<select name="language"><option value="en">English</option><option value="hi">Hindi</option><option value="kn">Kannada</option><option value="mr">Marathi</option><option value="te">Telugu</option></select></label></div></div>
+  <label>Required sections / topics (one per line)<textarea name="topics" required></textarea></label>
+  <label>Evaluation criteria (one per line)<textarea name="criteria" required placeholder="Concrete example and individual contribution&#10;Reasoning and tradeoffs"></textarea></label>
+  <label>Optional pasted resume<textarea name="resume" maxlength="20000"></textarea></label>
+  <details><summary>Local camera settings</summary>
+    <label><input name="phone_enabled" type="checkbox" style="width:auto"> Enable local mobile-phone detection for human review</label>
+    <label>Phone analysis frames per second<input name="phone_fps" type="number" min=".5" max="3" step=".5" value="2"></label>
+    <label>Phone model score threshold<input name="phone_confidence" type="number" min=".3" max="1" step=".05" value=".7"></label>
+    <label>Sustained phone observation (seconds)<input name="phone_sustain_secs" type="number" min="1" max="30" value="2"></label>
+    <label>Phone event cooldown (seconds)<input name="phone_cooldown_secs" type="number" min="5" max="120" value="15"></label>
+    <label>Analysis frames per second<input name="fps" type="number" min="3" max="5" value="4" step=".5"></label>
+    <label>Minimum face confidence<input name="confidence" type="number" min=".3" max="1" value=".6" step=".05"></label>
+    <label>Absence threshold (seconds)<input name="absent_secs" type="number" min="1" max="30" value="3"></label>
+    <label>Multiple faces threshold (seconds)<input name="multiple_secs" type="number" min="1" max="30" value="2"></label>
+    <label>Position change threshold (seconds)<input name="displacement_secs" type="number" min="1" max="30" value="3"></label>
+    <label>Position change (fraction of frame)<input name="displacement_ratio" type="number" min=".1" max="1" step=".05" value=".25"></label>
+    <label>Event cooldown (seconds)<input name="cooldown_secs" type="number" min="5" max="120" value="15"></label>
+  </details>
+  <p class="hint">Drafting uses free templates based on your topics. Review language, difficulty, question-specific criteria, and skill mappings before activation. Sources are treated as data.</p>
+  <button type="submit">Draft plan</button>
+</form></div><div>
+<section class="panel"><h2>2. Review the plan</h2>
+  <p id="plan-role">Choose or draft an interview.</p>
+  <p class="hint">Edit the JSON: stable IDs, section budgets in seconds, questions, skill mappings, criteria, and maximum follow-ups. Keep the final candidate_questions section. Map only skills you supplied; unmapped skills remain not assessed.</p>
+  <textarea id="plan-editor" aria-label="Editable interview plan" style="min-height:460px;font-family:monospace"></textarea>
+  <button id="review-plan" disabled>Validate and save reviewed plan</button>
+  <button id="activate-plan" class="secondary" disabled>Activate candidate link</button>
+  <button id="copy-plan" class="secondary" disabled>Copy into new interview</button>
+  <p id="candidate-link" style="overflow-wrap:anywhere"></p>
+</section>
+<section class="panel"><h2>Saved interviews</h2><button id="refresh" class="secondary">Refresh list</button><div id="interview-list"></div></section>
+</div></div>
+<section class="panel" id="report-panel" hidden><h2>Recruiter report</h2>
+  <p id="report-overview"></p><div id="report-content"></div>
+  <section id="report-summary" class="panel" aria-label="Plain-English interview summary"></section>
+  <label>Recruiter notes<textarea id="recruiter-notes"></textarea></label>
+  <label>Human decision<input id="human-decision" placeholder="Your decision; no automated hiring recommendation"></label>
+  <button id="save-review">Save human review</button>
+</section>
+{% endblock %}

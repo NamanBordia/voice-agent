@@ -69,6 +69,8 @@ from app.services.speculation_controller import (
 )
 from app.services.turn_collector import TurnCollector, utc_now
 from app.services.user_input import UserInputGate
+from app.interviews.service import InterviewBinding
+from app.interviews.processor import InterviewResponseProcessor
 
 def _stt_cfg(snapshot: ConfigSnapshot) -> dict[str, Any]:
     return (snapshot.get("runtime_config") or {}).get("stt") or {}
@@ -392,6 +394,8 @@ class PipelineHooks:
     on_connected: Callable[[], None]
     on_disconnected: Callable[[], None]
     on_error: Callable[[str], None]
+    interview: InterviewBinding | None = None
+    on_interview_finished: Callable[[], None] | None = None
 
 
 def _build_pipeline_processors(
@@ -403,13 +407,20 @@ def _build_pipeline_processors(
     stream_sid: str | None,
     metrics_observer: TurnMetricsObserver,
     on_provider_error: Callable[[str], None] | None = None,
+    interview: InterviewBinding | None = None,
+    on_interview_finished: Callable[[], None] | None = None,
 ) -> list[Any]:
     """Construct the full V3 processor list and wire the EOT side channel."""
 
     stt = _build_stt(snapshot, settings)
+    if interview is not None and isinstance(stt, SarvamRealtimeSTTService):
+        stt.configure_turn_hold(int(_stt_cfg(snapshot).get("turn_stop_timeout_ms", 500)))
     tts = _build_tts(snapshot, settings)
-    llm = _build_llm(snapshot, settings)
+    llm = (InterviewResponseProcessor(interview, on_interview_finished)
+           if interview is not None else _build_llm(snapshot, settings))
     context = _build_context(snapshot)
+    if interview is not None and interview.context_messages:
+        context.set_messages(context.messages + interview.context_messages)
     aggregator_pair = _build_aggregator_pair(
         context,
         turn_stop_timeout_ms=int(_stt_cfg(snapshot).get("turn_stop_timeout_ms", 500)),
@@ -520,6 +531,10 @@ def _build_pipeline_processors(
             )
             turn = result.turn
             if turn is None:
+                return False
+            if interview is not None and not await interview.accept(
+                f"{call_sid}:{service.provider_turn_index}", _normalize_transcript_text(turn.text)
+            ):
                 return False
             # Per-turn readiness from the actual connect time (tri-state), not the
             # startup early-audio latch which poisoned every later turn (OBS-1).
@@ -677,6 +692,8 @@ async def run_pipeline(
             stream_sid=stream_sid,
             metrics_observer=metrics_observer,
             on_provider_error=hooks.on_error,
+            interview=hooks.interview,
+            on_interview_finished=hooks.on_interview_finished,
         )
     pipeline = Pipeline(processors)
 

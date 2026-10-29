@@ -14,7 +14,7 @@ from main import app
 @pytest.fixture
 def client():
     with patch("main.run_local_warmup", new=AsyncMock()):
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://localhost", client=("127.0.0.1", 50000)) as client:
             yield client
 
 

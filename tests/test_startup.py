@@ -9,7 +9,7 @@ from main import app
 
 def test_startup_loads_files_and_runs_local_warmup():
     with patch("main.run_local_warmup", new_callable=AsyncMock) as warm:
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://localhost", client=("127.0.0.1", 50000)) as client:
             assert client.get("/").status_code == 200
             assert client.get("/telephony/webhook").status_code == 404
         warm.assert_awaited_once()

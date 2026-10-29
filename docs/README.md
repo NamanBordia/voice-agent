@@ -5,6 +5,9 @@ The application is a single-user local browser voice agent with SmallWebRTC and 
 | Document | Topic |
 |---|---|
 | [ARCHITECTURE](ARCHITECTURE.md) | Components, pipeline, readiness, and cleanup ownership. |
+| [Interviews](INTERVIEWS.md) | Recruiter setup, candidate workflow, camera privacy, recovery, reports, and manual checks. |
+| [Interview system explained](INTERVIEW_SYSTEM_EXPLAINED.md) | Presentation guide: complete workflow, component connections, speech/vision models, data flow, reports and prototype limitations. |
+| [ADR-007](decisions/ADR_007_SINGLE_INTERVIEW.md) | Approved single-interview boundaries and dependency. |
 | [Sarvam migration](SARVAM_MIGRATION.md) | Provider compatibility, startup, and five-language manual checks. |
 | [CONFIGURATION](CONFIGURATION.md) | Local settings, defaults, validation, and snapshots. |
 | [LATENCY](LATENCY.md) | Streaming, endpointing, and honest browser measurement. |

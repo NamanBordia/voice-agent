@@ -26,6 +26,7 @@ class ConfigSnapshot(TypedDict):
     TTS_MODEL: str
     SAMPLE_RATE: int
     snapshot_version: NotRequired[str]
+    interview_session_id: NotRequired[str]
 
 
 class RuntimeSession(TypedDict):

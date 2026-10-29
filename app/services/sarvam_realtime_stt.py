@@ -11,6 +11,7 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlencode
+from loguru import logger
 
 from pipecat.frames.frames import (
     CancelFrame, EndFrame, ErrorFrame, Frame, InterimTranscriptionFrame,
@@ -56,6 +57,12 @@ class SarvamRealtimeSTTService(STTService):
         self._failed = False
         self._utterance_open = False
         self._turn_index = 0
+        self._hold_seconds = 0.0
+        self._pending_finals: list[tuple[str, Language | None]] = []
+        self._release_task: asyncio.Task[None] | None = None
+        self._releasing = False
+        self._speech_started_at: float | None = None
+        self._speech_ended_at: float | None = None
         self.accept_turn: Callable[[], bool] = lambda: False
         self.commit_turn: Callable[[Any, str], Awaitable[bool]] | None = None
         self._register_event_handler("on_start_of_turn", sync=True)
@@ -71,6 +78,49 @@ class SarvamRealtimeSTTService(STTService):
     def can_generate_metrics(self) -> bool:
         """Enable Pipecat STT timing alongside the existing turn observer."""
         return True
+
+    def configure_turn_hold(self, milliseconds: int) -> None:
+        """Hold interview finals briefly using the existing snapshotted turn-stop setting."""
+        self._hold_seconds = max(0, min(milliseconds, 3000)) / 1000
+
+    async def _cancel_release(self) -> None:
+        task, self._release_task = self._release_task, None
+        if task is not None and task is not asyncio.current_task():
+            if not self._releasing:
+                task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    async def _release_pending(self) -> None:
+        if self._closing or self._failed or self._utterance_open:
+            return
+        chunks, self._pending_finals = self._pending_finals, []
+        if not chunks or not self.accept_turn():
+            return
+        text = " ".join(chunk for chunk, _ in chunks)
+        detected = next((language for _, language in reversed(chunks) if language is not None), None)
+        self.last_detected_language = detected.value.split("-")[0] if detected else None
+        if self.commit_turn is None or not await self.commit_turn(self, text):
+            return
+        logger.debug("Sarvam accepted final released", provider_turn_index=self._turn_index,
+            chunks=len(chunks), hold_ms=self._hold_seconds * 1000, released_at=time.monotonic())
+        await self.push_frame(TranscriptionFrame(text, "", time_now_iso8601(), finalized=True, language=detected))
+        await self.push_frame(UserStoppedSpeakingFrame())
+
+    async def _release_after_hold(self) -> None:
+        try:
+            await asyncio.sleep(self._hold_seconds)
+            self._releasing = True
+            await self._release_pending()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # Preserve failed checkpoints; do not silently lose an asynchronous release.
+            await self._fail("accepted transcript release failed")
+        finally:
+            self._releasing = False
 
     async def wait_until_ready(self) -> None:
         """Wait for Sarvam's session.begin, rather than just an open socket."""
@@ -114,6 +164,8 @@ class SarvamRealtimeSTTService(STTService):
         if self._failed or self._closing:
             return
         self._failed = True
+        await self._cancel_release()
+        self._pending_finals.clear()
         self._ready.clear()
         # Redact before ErrorFrame is logged, persisted, or sent to the browser.
         safe_reason = reason.replace(self._api_key, "[REDACTED]") if self._api_key else reason
@@ -132,11 +184,18 @@ class SarvamRealtimeSTTService(STTService):
         elif event == "vad.speech_start":
             if self._utterance_open:
                 return
+            await self._cancel_release()
             self._utterance_open = True
             self._turn_index += 1
+            self._speech_started_at = time.monotonic()
+            self._speech_ended_at = None
+            logger.debug("Sarvam speech started", provider_turn_index=self._turn_index,
+                started_at=self._speech_started_at, buffered_chunks=len(self._pending_finals))
             await self._call_event_handler("on_start_of_turn")
             if self.accept_turn():
                 await self.push_frame(UserStartedSpeakingFrame())
+            else:
+                self._pending_finals.clear()
         elif event == "transcript.partial":
             if self._utterance_open and self.accept_turn() and message.get("text", "").strip():
                 await self.push_frame(InterimTranscriptionFrame(
@@ -144,6 +203,9 @@ class SarvamRealtimeSTTService(STTService):
                     language=to_language_enum(message.get("language") or self._config.language_code),
                 ))
         elif event == "vad.speech_end":
+            self._speech_ended_at = time.monotonic()
+            logger.debug("Sarvam speech ended", provider_turn_index=self._turn_index,
+                ended_at=self._speech_ended_at)
             if self._utterance_open and self.accept_turn():
                 await self.start_ttfb_metrics()
         elif event == "transcript.final":
@@ -151,19 +213,25 @@ class SarvamRealtimeSTTService(STTService):
                 return
             self._utterance_open = False
             text = " ".join(str(message.get("text") or "").split())
-            if not self.accept_turn() or not re.search(r"\w", text):
+            logger.debug("Sarvam final received", provider_turn_index=self._turn_index,
+                final_at=time.monotonic(), speech_ended_at=self._speech_ended_at,
+                accepted=self.accept_turn(), characters=len(text))
+            if not self.accept_turn():
+                self._pending_finals.clear()
                 return
-            detected = to_language_enum(message.get("language") or self._config.language_code)
-            self.last_detected_language = detected.value.split("-")[0] if detected else None
-            if self.commit_turn is None or not await self.commit_turn(self, text):
+            if re.search(r"\w", text):
+                self._pending_finals.append((text, to_language_enum(message.get("language") or self._config.language_code)))
+            if sum(len(chunk) + 1 for chunk, _ in self._pending_finals) > 10000:
+                await self._fail("accepted transcript exceeded the interview answer limit")
                 return
-            await self.push_frame(TranscriptionFrame(
-                text, "", time_now_iso8601(), finalized=True,
-                language=detected,
-            ))
-            # Release only after an accepted final. Provider speech_end can precede
-            # final by an arbitrary delay; releasing there risks an empty turn.
-            await self.push_frame(UserStoppedSpeakingFrame())
+            if not self._pending_finals:
+                return
+            # Speech resuming during this window cancels release and retains the
+            # accepted chunks. No reservation, memory or grading happens until release.
+            if self._hold_seconds:
+                self._release_task = asyncio.create_task(self._release_after_hold(), name="sarvam-final-hold")
+            else:
+                await self._release_pending()
         elif event == "error":
             await self._fail(f"provider error: {message.get('message') or 'unspecified rejection'}")
         elif event == "session.end" and not self._closing:
@@ -182,6 +250,8 @@ class SarvamRealtimeSTTService(STTService):
 
     async def _close(self) -> None:
         self._closing = True
+        await self._cancel_release()
+        self._pending_finals.clear()
         self._ready.clear()
         if self._connection_task is not None:
             await self.cancel_task(self._connection_task, timeout=None)

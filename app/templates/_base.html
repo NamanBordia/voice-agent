@@ -99,11 +99,14 @@
 <body>
 <div class="wrap">
   <nav class="topnav">
+    {% if not candidate_mode %}
     <a href="/">Talk</a>
+    <a href="/interviews">Interviews</a>
     <a href="/config">⚙ Config</a>
     <a href="/calls">📞 Calls</a>
     <span class="spacer"></span>
     <span class="muted">Browser Voice Agent</span>
+    {% else %}<span>Candidate interview</span>{% endif %}
   </nav>
   {% block content %}{% endblock %}
 </div>

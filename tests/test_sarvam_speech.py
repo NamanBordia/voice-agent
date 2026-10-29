@@ -40,6 +40,64 @@ def make_stt():
     return service, gate
 
 
+@pytest.mark.asyncio
+async def test_interview_hold_combines_continuation_before_any_commit_and_deduplicates_finals():
+    stt, _ = make_stt(); stt.configure_turn_hold(20)
+    await stt.handle_message({"event": "vad.speech_start"})
+    first = {"event": "transcript.final", "text": "I store the numbers"}
+    await stt.handle_message(first); await stt.handle_message(first)
+    stt.commit_turn.assert_not_awaited()
+    await stt.handle_message({"event": "vad.speech_start"})
+    await stt.handle_message({"event": "transcript.partial", "text": "and their indices"})
+    stt.commit_turn.assert_not_awaited()
+    await stt.handle_message({"event": "transcript.final", "text": "and their indices"})
+    await stt._release_task
+    stt.commit_turn.assert_awaited_once_with(stt, "I store the numbers and their indices")
+    finals = [call.args[0] for call in stt.push_frame.await_args_list if isinstance(call.args[0], TranscriptionFrame)]
+    assert len(finals) == 1 and finals[0].text == "I store the numbers and their indices"
+    assert stt.provider_turn_index == 2
+    assert sum(isinstance(call.args[0], UserStoppedSpeakingFrame) for call in stt.push_frame.await_args_list) == 1
+    await stt._close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cause", ["close", "mute", "failure"])
+async def test_delayed_final_never_leaks_after_close_mute_or_provider_failure(cause):
+    stt, gate = make_stt(); stt.configure_turn_hold(20)
+    stt.push_error_frame = AsyncMock()
+    await stt.handle_message({"event": "vad.speech_start"})
+    await stt.handle_message({"event": "transcript.final", "text": "Pending answer"})
+    task = stt._release_task
+    if cause == "close": await stt._close()
+    elif cause == "failure": await stt._fail("provider stopped")
+    else:
+        gate.set_muted(True)
+        await task
+    assert task.done()
+    stt.commit_turn.assert_not_awaited()
+    assert not any(isinstance(call.args[0], TranscriptionFrame) for call in stt.push_frame.await_args_list)
+    await stt._close()
+
+
+@pytest.mark.asyncio
+async def test_new_speech_does_not_cancel_an_in_progress_checkpoint():
+    stt, _ = make_stt(); stt.configure_turn_hold(1)
+    saving, saved = asyncio.Event(), asyncio.Event()
+    async def commit(service, text):
+        saving.set(); await saved.wait(); return True
+    stt.commit_turn = AsyncMock(side_effect=commit)
+    await stt.handle_message({"event": "vad.speech_start"})
+    await stt.handle_message({"event": "transcript.final", "text": "Already committed"})
+    await asyncio.wait_for(saving.wait(), .5)
+    continuing = asyncio.create_task(stt.handle_message({"event": "vad.speech_start"}))
+    await asyncio.sleep(0)
+    assert not continuing.done()
+    saved.set(); await continuing
+    assert any(isinstance(call.args[0], TranscriptionFrame) for call in stt.push_frame.await_args_list)
+    stt.commit_turn.assert_awaited_once()
+    await stt._close()
+
+
 @pytest.mark.parametrize("code", language.SUPPORTED_RESPONSE_LANGUAGES)
 @pytest.mark.asyncio
 async def test_split_prefix_routes_before_streaming_text(code):

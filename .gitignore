@@ -34,5 +34,6 @@ Thumbs.db
 data/
 frontend/node_modules/
 app/static/*.js
+app/static/vision/
 
 .tmp_packages/

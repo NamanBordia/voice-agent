@@ -17,11 +17,15 @@ Use Python 3.11+ and Node 22.14+ for the initial browser build. Node is not need
    Refresh existing values locally; never put them in the browser or commit them.
 3. Build the browser assets:
    `npm --prefix frontend ci`
-   then `npm --prefix frontend run build`.
+   then `npm --prefix frontend run prepare:vision`
+   and `npm --prefix frontend run build`.
 4. Run:
    `python -m uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1`
 5. Open [Settings](http://localhost:8000/config), review the Sarvam Bulbul v3 voice (default `shubh`), and save.
 6. Open [Talk](http://localhost:8000), click Start, allow the microphone, and enable audio if prompted.
+7. For interview mode, open [Interviews](http://localhost:8000/interviews), draft and
+   review a plan, activate its candidate link, and complete the device checks.
+   See [the interview workflow](docs/INTERVIEWS.md) for camera setup, reports, and recovery.
 
 The agent listens after the greeting and between replies. Headphones help avoid echo.
 End waits for cleanup and reports whether the conversation was saved. If saving takes longer

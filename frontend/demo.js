@@ -9,6 +9,9 @@ const retryButton = /** @type {HTMLButtonElement} */ (element('retry-save'));
 const audio = /** @type {HTMLAudioElement} */ (element('bot-audio'));
 const meter = /** @type {HTMLMeterElement} */ (element('mic-level'));
 const transcript = element('transcript');
+const participation = globalThis.interviewParticipation || null;
+const endEndpoint = (sid) => participation?.endEndpoint || `/api/sessions/${encodeURIComponent(sid)}/end`;
+let thinking = false;
 let client = null;
 let generation = 0;
 let callSid = null;
@@ -24,7 +27,7 @@ let pendingSaveSid = null;
 
 function syncMic() {
   if (!client) return;
-  const enabled = !muted && !greeting && !botSpeaking && !stopping;
+  const enabled = !muted && !greeting && !botSpeaking && !stopping && !(participation && thinking);
   // Track gating is immediate even when a media manager changes devices asynchronously.
   const track = client.tracks?.()?.local?.audio;
   if (track) track.enabled = enabled;
@@ -108,8 +111,8 @@ function resetControls() {
 
 async function saveConversation(sid) {
   pendingSaveSid = sid;
-  const response = await fetch(`/api/sessions/${encodeURIComponent(sid)}/end`, {
-    method: 'POST', signal: AbortSignal.timeout(65000),
+  const response = await fetch(endEndpoint(sid), {
+    method: 'POST', headers: participation?.headers, signal: AbortSignal.timeout(65000),
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.detail || 'Could not confirm cleanup.');
@@ -119,6 +122,7 @@ async function saveConversation(sid) {
     element('history').hidden = false;
     pendingSaveSid = null;
   }
+  if (result.saved && participation) pendingSaveSid = null;
   if (result.error) error(result.error);
   return result.saved;
 }
@@ -132,8 +136,11 @@ async function stop() {
   muteButton.disabled = true;
   status('Ending and saving…', 'saving');
   try {
-    if (callSid) {
-      await saveConversation(callSid);
+    if (participation?.beforeEnd) await participation.beforeEnd();
+    // A candidate offer can reserve the runner before the session message arrives.
+    const cleanupSid = callSid || participation?.sessionId;
+    if (cleanupSid) {
+      await saveConversation(cleanupSid);
     }
   } catch (cause) {
     error(cause.message || 'Could not confirm whether the conversation was saved.');
@@ -146,6 +153,7 @@ async function stop() {
     retryButton.hidden = !pendingSaveSid;
     status(pendingSaveSid ? 'Conversation saving is not confirmed. Click Retry saving.' : 'Conversation ended.',
       pendingSaveSid ? 'attention' : 'idle');
+    await participation?.onEnd?.();
   }
 }
 
@@ -158,7 +166,7 @@ startButton.addEventListener('click', async () => {
   transcript.replaceChildren();
   callSid = null;
   muted = false;
-  botReady = uiReady = botSpeaking = stopping = false;
+  botReady = uiReady = botSpeaking = stopping = thinking = false;
   greeting = true;
   assistantRow = userDraft = null;
   muteButton.textContent = 'Mute';
@@ -166,8 +174,11 @@ startButton.addEventListener('click', async () => {
   status('Allow microphone access to connect…', 'connecting');
   let active;
   try {
+    if (participation?.beforeStart && !await participation.beforeStart()) {
+      resetControls(); return;
+    }
     active = new PipecatClient({
-      transport: new SmallWebRTCTransport({ iceServers: [] }),
+      transport: participation?.createTransport?.() || new SmallWebRTCTransport({ iceServers: [] }),
       enableMic: true,
       enableCam: false,
       callbacks: {
@@ -185,6 +196,7 @@ startButton.addEventListener('click', async () => {
           if (!valid()) return;
           if (data.type === 'session') {
             callSid = data.call_sid;
+            participation?.onSession?.(callSid);
             endButton.disabled = false;
             muteButton.disabled = false;
           }
@@ -202,6 +214,7 @@ startButton.addEventListener('click', async () => {
         onBotStoppedSpeaking: () => {
           if (!valid() || !botSpeaking) return;
           botSpeaking = false;
+          thinking = false;
           assistantRow = null;
           if (greeting) {
             greeting = false;
@@ -224,6 +237,7 @@ startButton.addEventListener('click', async () => {
             userDraft = null;
             assistantRow = null;
             status('Thinking…', 'preparing');
+            if (participation) { thinking = true; syncMic(); }
           }
         },
         onBotLlmStarted: () => { if (valid()) status('Thinking…', 'preparing'); },
@@ -239,6 +253,7 @@ startButton.addEventListener('click', async () => {
     error(cause.message || 'This browser could not initialize audio.');
     resetControls();
     status('Could not initialize audio.', 'error');
+    await participation?.onEnd?.();
     return;
   }
   client = active;
@@ -250,7 +265,7 @@ startButton.addEventListener('click', async () => {
     if (!valid()) return;
     endButton.disabled = false; // Allows canceling a connection before a session ID arrives.
     status('Connecting…', 'connecting');
-    await active.connect({ webrtcRequestParams: { endpoint: '/api/offer' } });
+    await active.connect({ webrtcRequestParams: { endpoint: participation?.offerEndpoint || '/api/offer', headers: participation?.headers } });
   } catch (cause) {
     if (!valid()) return;
     error(cause.message || 'Connection failed. Check microphone permissions and Settings.');
@@ -281,11 +296,14 @@ retryButton.addEventListener('click', async () => {
     startButton.disabled = Boolean(pendingSaveSid);
     status(pendingSaveSid ? 'Saving is not confirmed. Retry shortly.' : 'Conversation saved.',
       pendingSaveSid ? 'attention' : 'saved');
+    if (!pendingSaveSid) await participation?.onEnd?.();
   }
 });
 element('audio-enable').addEventListener('click', () => void playbackReady());
 window.addEventListener('pagehide', () => {
   client?.enableMic(false);
-  if (callSid) void fetch(`/api/sessions/${encodeURIComponent(callSid)}/end`, { method: 'POST', keepalive: true }).catch(() => {});
+  participation?.onPageHide?.();
+  const cleanupSid = callSid || (client && participation?.sessionId);
+  if (cleanupSid) void fetch(endEndpoint(cleanupSid), { method: 'POST', headers: participation?.headers, keepalive: true }).catch(() => {});
   void client?.disconnect().catch(() => {});
 });

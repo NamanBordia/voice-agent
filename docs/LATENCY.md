@@ -23,6 +23,11 @@ These are backend events. Network jitter, codec buffering, and browser playback 
 Sarvam `silence_duration_ms` controls server endpointing. Pipecat's separate
 `turn_stop_timeout_ms` remains the post-STT debounce. The adapter releases a turn only
 when its final transcript is accepted. Tune one variable at a time after a human baseline.
+In interview mode, the same snapshotted turn-stop setting also supplies a bounded
+final-transcript hold before checkpointing. Speech resuming during that window combines
+accepted chunks before one response is reserved. This adds latency (500 ms at the
+default) to protect natural pauses; browser conversations must validate the tradeoff.
+DEBUG STT logs expose speech start/end, final arrival and final release timing.
 
 The first greeting can wait for provider connection readiness. This trades some first-connect
 speed for not losing the first utterance. It is separate from steady-state turn responsiveness.

@@ -1,0 +1,32 @@
+{% extends "_base.html" %}
+{% block title %}Candidate preparation and interview{% endblock %}
+{% block head %}<script type="module" src="/static/candidate.js"></script><link rel="stylesheet" href="/static/talk.css">{% endblock %}
+{% block content %}
+<main id="candidate-root" data-session-id="{{ session_id }}">
+<h1 id="interview-title">Preparing interview…</h1><p id="interview-info"></p>
+<p id="preparation-status" role="status"></p>
+<section class="panel" id="device-check"><h2>Prepare your devices</h2>
+<p>Use headphones if possible. Answer after the interviewer stops speaking; your microphone is gated during replies. Pause closes media; Resume reconnects at the pending question and reopens the camera if monitoring consent is still checked.</p>
+<button id="check-mic" type="button">Check microphone</button> <meter id="check-level" min="0" max="1" value="0" aria-label="Microphone check"></meter>
+<button id="check-speaker" type="button">Play speaker test</button>
+<label><input id="speaker-confirmed" type="checkbox" style="width:auto"> I heard the test tone.</label>
+<button id="preview-camera" type="button">Preview camera locally</button>
+<video id="camera-preview" autoplay muted playsinline style="display:block;max-width:480px;width:100%;max-height:270px;margin-top:12px"></video>
+<p>With your consent, this browser checks for face absence, multiple visible faces, and sustained position changes. Images stay on this device and are not recorded or uploaded. Only neutral event counts, timing, confidence, and monitoring status are sent to this interview server. These observations can be wrong or manipulated and do not affect technical ratings or make hiring decisions.</p>
+<p id="phone-monitoring-info">Phone detection availability will appear here. When enabled, possible visible-phone sightings and per-detector analysis summaries are sent for human review. This does not establish phone use or intent.</p>
+<label><input id="camera-consent" type="checkbox" style="width:auto"> I consent to local face analysis, mobile-phone detection when enabled, and sending compact observations and coverage summaries.</label>
+<p id="monitoring-status" role="status">Monitoring has not started. You may continue with voice if camera monitoring is unavailable or declined.</p>
+<button id="ready-interview" type="button">Devices checked — prepare interview</button>
+</section>
+<section id="conversation" data-state="idle" class="demo">
+<p id="status" role="status">Complete the device checks to start.</p>
+<meter id="mic-level" min="0" max="1" value="0" aria-label="Voice microphone activity"></meter>
+<div id="transcript" class="transcript" aria-live="polite"><p id="empty">Questions and your words will appear here.</p></div>
+<p id="error" class="err" role="alert" hidden></p>
+<button id="audio-enable" hidden>Enable audio</button><button id="retry-save" hidden>Retry saving</button>
+<p id="history" hidden><a id="history-link"></a></p>
+<div class="controls"><button id="start" disabled>Start interview</button><button id="mute" disabled aria-pressed="false">Mute</button><button id="end" disabled>Pause</button></div>
+<button id="abandon" class="secondary">End interview permanently</button>
+<p id="input-device"></p><audio id="bot-audio" autoplay playsinline></audio>
+</section></main>
+{% endblock %}
