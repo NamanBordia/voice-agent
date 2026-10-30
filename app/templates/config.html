@@ -17,36 +17,36 @@
 
   <form method="post" action="/config" hx-post="/config" hx-target="#settings-panel" hx-select="#settings-panel" hx-swap="outerHTML">
     <fieldset><legend>STT - Sarvam realtime</legend>
-      <label>Model</label><input name="stt_model" value="{{ config.stt.model }}" />
-      <label>Language</label><select name="stt_language_code">
+      <label for="config-stt_model">Model</label><input id="config-stt_model" name="stt_model" value="{{ config.stt.model }}" />
+      <label for="config-stt_language_code">Language</label><select id="config-stt_language_code" name="stt_language_code">
         {% for code in ['auto', 'en-IN', 'hi-IN', 'kn-IN', 'mr-IN', 'te-IN'] %}
         <option {{ 'selected' if config.stt.language_code == code }}>{{ code }}</option>{% endfor %}
       </select>
-      <label>Stream type</label><select name="stt_stream_type">
+      <label for="config-stt_stream_type">Stream type</label><select id="config-stt_stream_type" name="stt_stream_type">
         {% for mode in ['fast', 'balanced'] %}<option {{ 'selected' if config.stt.stream_type == mode }}>{{ mode }}</option>{% endfor %}
       </select>
-      <label>VAD threshold</label><input name="stt_threshold" value="{{ config.stt.threshold }}" />
-      <label>End-of-speech silence (ms)</label><input name="stt_silence_duration_ms" value="{{ config.stt.silence_duration_ms }}" />
-      <label>Minimum speech (ms)</label><input name="stt_min_speech_duration_ms" value="{{ config.stt.min_speech_duration_ms }}" />
-      <label>Post-STT debounce (ms)</label><input name="stt_turn_stop_timeout_ms" value="{{ config.stt.turn_stop_timeout_ms }}" />
+      <label for="config-stt_threshold">VAD threshold</label><input id="config-stt_threshold" name="stt_threshold" value="{{ config.stt.threshold }}" />
+      <label for="config-stt_silence_duration_ms">End-of-speech silence (ms)</label><input id="config-stt_silence_duration_ms" name="stt_silence_duration_ms" value="{{ config.stt.silence_duration_ms }}" />
+      <label for="config-stt_min_speech_duration_ms">Minimum speech (ms)</label><input id="config-stt_min_speech_duration_ms" name="stt_min_speech_duration_ms" value="{{ config.stt.min_speech_duration_ms }}" />
+      <label for="config-stt_turn_stop_timeout_ms">Post-STT debounce (ms)</label><input id="config-stt_turn_stop_timeout_ms" name="stt_turn_stop_timeout_ms" value="{{ config.stt.turn_stop_timeout_ms }}" />
       <p class="hint">Original-language transcription. Auto detects all five languages. Flux eager EOT is unavailable.</p>
     </fieldset>
 
     <fieldset><legend>LLM — Cerebras</legend>
       <div class="row">
-        <div><label>Model</label><input name="llm_model" value="{{ config.llm.model }}" /></div>
-        <div><label>Temperature</label><input name="llm_temperature" value="{{ config.llm.temperature }}" /></div>
+        <div><label for="config-llm_model">Model</label><input id="config-llm_model" name="llm_model" value="{{ config.llm.model }}" /></div>
+        <div><label for="config-llm_temperature">Temperature</label><input id="config-llm_temperature" name="llm_temperature" value="{{ config.llm.temperature }}" /></div>
       </div>
       <div class="row">
         <div>
-          <label>Max tokens</label><input name="llm_max_tokens" value="{{ config.llm.max_tokens }}" />
+          <label for="config-llm_max_tokens">Max tokens</label><input id="config-llm_max_tokens" name="llm_max_tokens" value="{{ config.llm.max_tokens }}" />
           <p class="hint">Includes reasoning and final answer tokens. GPT-OSS starts at 1024; the prompt keeps spoken replies short.</p>
         </div>
-        <div><label>Request timeout (s)</label><input name="llm_request_timeout_seconds" value="{{ config.llm.request_timeout_seconds }}" />
+        <div><label for="config-llm_request_timeout_seconds">Request timeout (s)</label><input id="config-llm_request_timeout_seconds" name="llm_request_timeout_seconds" value="{{ config.llm.request_timeout_seconds }}" />
           <p class="hint">Hard timeout per LLM request (wired to the Cerebras client).</p></div>
       </div>
-      <label>Reasoning effort</label>
-      <select name="llm_reasoning_effort">
+      <label for="config-llm_reasoning_effort">Reasoning effort</label>
+      <select id="config-llm_reasoning_effort" name="llm_reasoning_effort">
         {% for effort in ['none', 'low', 'medium', 'high'] %}
           <option value="{{ effort }}" {{ 'selected' if config.llm.reasoning_effort == effort }}>{{ effort }}</option>
         {% endfor %}
@@ -57,41 +57,41 @@
 
     <fieldset><legend>TTS — Sarvam streaming</legend>
       <div class="row">
-        <div><label>Model</label><input name="tts_model" value="{{ config.tts.model }}" /></div>
-        <div><label>Voice (Bulbul v3)</label><select name="tts_voice_id">
+        <div><label for="config-tts_model">Model</label><input id="config-tts_model" name="tts_model" value="{{ config.tts.model }}" /></div>
+        <div><label for="config-tts_voice_id">Voice (Bulbul v3)</label><select id="config-tts_voice_id" name="tts_voice_id">
         {% for voice in ['shubh', 'aditya', 'ritu', 'priya', 'neha', 'rahul', 'pooja', 'rohan', 'simran', 'kavya', 'amit', 'dev', 'ishita', 'shreya', 'ratan', 'varun', 'manan', 'sumit', 'roopa', 'kabir', 'aayan', 'ashutosh', 'advait'] %}
         <option {{ 'selected' if config.tts.voice_id == voice }}>{{ voice }}</option>{% endfor %}</select></div>
       </div>
     </fieldset>
 
-    <label>Speech pace</label><input name="tts_pace" value="{{ config.tts.pace }}" />
-    <label>Voice temperature</label><input name="tts_temperature" value="{{ config.tts.temperature }}" />
-    <label>TTS buffer (characters)</label><input type="number" min="30" max="100" name="tts_min_buffer_size" value="{{ config.tts.min_buffer_size }}" />
+    <label for="config-tts_pace">Speech pace</label><input id="config-tts_pace" name="tts_pace" value="{{ config.tts.pace }}" />
+    <label for="config-tts_temperature">Voice temperature</label><input id="config-tts_temperature" name="tts_temperature" value="{{ config.tts.temperature }}" />
+    <label for="config-tts_min_buffer_size">TTS buffer (characters)</label><input id="config-tts_min_buffer_size" type="number" min="30" max="100" name="tts_min_buffer_size" value="{{ config.tts.min_buffer_size }}" />
     <p class="hint">Sarvam requires at least 30 characters. The flush signal also synthesizes shorter replies.</p>
     <fieldset><legend>Prompts</legend>
-      <label>System prompt (persona)</label>
-      <textarea name="system_prompt">{{ config.prompt.system_prompt }}</textarea>
+      <label for="config-system_prompt">System prompt (persona)</label>
+      <textarea id="config-system_prompt" name="system_prompt">{{ config.prompt.system_prompt }}</textarea>
       <p class="hint">The &lt;en&gt;/&lt;hi&gt;/&lt;kn&gt;/&lt;mr&gt;/&lt;te&gt; language contract is added by the system automatically — you don't need to mention it here.</p>
-      <label>Opening greeting text</label>
-      <textarea name="greeting_text">{{ config.prompt.greeting_text }}</textarea>
+      <label for="config-greeting_text">Opening greeting text</label>
+      <textarea id="config-greeting_text" name="greeting_text">{{ config.prompt.greeting_text }}</textarea>
       <p class="hint">For an Indic greeting, begin with its language tag, e.g. &lt;kn&gt;. The tag is removed before speech and history.</p>
     </fieldset>
 
     <fieldset><legend>Memory</legend>
       <div class="row">
-        <div><label>Recent turn pairs</label><input name="mem_recent_turn_pairs" value="{{ config.memory.recent_turn_pairs }}" /></div>
-        <div><label>Summary after turn</label><input name="mem_enable_running_summary_after_turn" value="{{ config.memory.enable_running_summary_after_turn }}" /></div>
-        <div><label>Summary every N turns</label><input name="mem_summary_update_every_turns" value="{{ config.memory.summary_update_every_turns }}" /></div>
+        <div><label for="config-mem_recent_turn_pairs">Recent turn pairs</label><input id="config-mem_recent_turn_pairs" name="mem_recent_turn_pairs" value="{{ config.memory.recent_turn_pairs }}" /></div>
+        <div><label for="config-mem_enable_running_summary_after_turn">Summary after turn</label><input id="config-mem_enable_running_summary_after_turn" name="mem_enable_running_summary_after_turn" value="{{ config.memory.enable_running_summary_after_turn }}" /></div>
+        <div><label for="config-mem_summary_update_every_turns">Summary every N turns</label><input id="config-mem_summary_update_every_turns" name="mem_summary_update_every_turns" value="{{ config.memory.summary_update_every_turns }}" /></div>
       </div>
       <div class="row">
         <div>
-          <label>Recall min overlap</label>
-          <input name="mem_recall_min_overlap" value="{{ config.memory.recall_min_overlap }}" />
+          <label for="config-mem_recall_min_overlap">Recall min overlap</label>
+          <input id="config-mem_recall_min_overlap" name="mem_recall_min_overlap" value="{{ config.memory.recall_min_overlap }}" />
           <p class="hint">Content-word overlap needed to surface an earlier turn. Higher = fewer/cleaner recalls (1–6). An explicit “you told me…” relaxes it to 1.</p>
         </div>
         <div>
-          <label>Memory block token cap</label>
-          <input name="mem_max_memory_block_tokens" value="{{ config.memory.max_memory_block_tokens }}" />
+          <label for="config-mem_max_memory_block_tokens">Memory block token cap</label>
+          <input id="config-mem_max_memory_block_tokens" name="mem_max_memory_block_tokens" value="{{ config.memory.max_memory_block_tokens }}" />
           <p class="hint">Budget for facts + recall + summary injected each turn, so a big block can’t inflate latency (100–2000).</p>
         </div>
       </div>
@@ -99,9 +99,9 @@
     </fieldset>
 
     <fieldset><legend>Ops</legend>
-      <label>Log level (next restart)</label><input name="debug_log_level" value="{{ config.ops.debug_log_level }}" />
-      <label>Browser readiness timeout (seconds)</label><input name="browser_ready_timeout_secs" value="{{ config.ops.browser_ready_timeout_secs }}" />
-      <label>Shutdown timeout (seconds)</label><input name="shutdown_timeout_secs" value="{{ config.ops.shutdown_timeout_secs }}" />
+      <label for="config-debug_log_level">Log level (next restart)</label><input id="config-debug_log_level" name="debug_log_level" value="{{ config.ops.debug_log_level }}" />
+      <label for="config-browser_ready_timeout_secs">Browser readiness timeout (seconds)</label><input id="config-browser_ready_timeout_secs" name="browser_ready_timeout_secs" value="{{ config.ops.browser_ready_timeout_secs }}" />
+      <label for="config-shutdown_timeout_secs">Shutdown timeout (seconds)</label><input id="config-shutdown_timeout_secs" name="shutdown_timeout_secs" value="{{ config.ops.shutdown_timeout_secs }}" />
       <p class="hint">How long End waits before offering Retry saving. Cleanup continues until the pipeline has finished.</p>
       <p class="hint">Set <code>DEBUG</code> to inspect transcription and turn diagnostics.</p>
     </fieldset>

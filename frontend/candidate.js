@@ -86,12 +86,14 @@ async function flushMonitoring(reason = 'connection_ended') {
 }
 async function refresh() {
   info = await request();
+  el('candidate-root').dataset.sessionStatus = info.status;
   sequence = Math.max(sequence, info.camera_sequence); heartbeatSequence = Math.max(heartbeatSequence, info.heartbeat_sequence);
   el('interview-title').textContent = info.title;
   el('phone-monitoring-info').textContent = info.camera.phone_enabled
     ? 'This interview also enables local mobile-phone detection. Possible sightings are sent for human review and never affect technical scores.'
     : 'Mobile-phone detection is not enabled for this interview.';
-  el('interview-info').textContent = `${info.duration_minutes} minutes · ${info.language} · ${info.status} · ${Math.ceil(info.remaining_secs / 60)} active minutes remaining`;
+  const languages = { en: 'English', hi: 'Hindi', kn: 'Kannada', mr: 'Marathi', te: 'Telugu' };
+  el('interview-info').textContent = `${info.duration_minutes} minutes · ${languages[info.language] || info.language} · ${Math.ceil(info.remaining_secs / 60)} active minutes remaining at last server update`;
   const terminal = ['completed', 'failed', 'abandoned'].includes(info.status);
   el('start').disabled = terminal || !prepared || running || info.status === 'in_progress';
   el('start').textContent = info.status === 'paused' ? 'Resume interview' : 'Start interview';

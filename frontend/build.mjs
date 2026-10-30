@@ -17,7 +17,7 @@ await build({
   target: ['chrome120', 'firefox121', 'safari17'],
 });
 await copyFile(new URL('node_modules/htmx.org/dist/htmx.min.js', import.meta.url), new URL('htmx.min.js', output));
-for (const entry of ['recruiter', 'candidate', 'camera-worker']) {
+for (const entry of ['recruiter', 'candidate', 'candidate-view', 'camera-worker']) {
   await build({
     entryPoints: [fileURLToPath(new URL(`${entry}.js`, import.meta.url))],
     outfile: fileURLToPath(new URL(`${entry}.js`, output)), bundle: true, minify: true,

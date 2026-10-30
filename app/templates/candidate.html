@@ -1,32 +1,35 @@
 {% extends "_base.html" %}
-{% block title %}Candidate preparation and interview{% endblock %}
-{% block head %}<script type="module" src="/static/candidate.js"></script><link rel="stylesheet" href="/static/talk.css">{% endblock %}
+{% block title %}Voice Agent — Candidate interview{% endblock %}
+{% block head %}<script type="module" src="/static/candidate.js"></script><script type="module" src="/static/candidate-view.js"></script><link rel="stylesheet" href="/static/talk.css">{% endblock %}
 {% block content %}
-<main id="candidate-root" data-session-id="{{ session_id }}">
-<h1 id="interview-title">Preparing interview…</h1><p id="interview-info"></p>
-<p id="preparation-status" role="status"></p>
-<section class="panel" id="device-check"><h2>Prepare your devices</h2>
-<p>Use headphones if possible. Answer after the interviewer stops speaking; your microphone is gated during replies. Pause closes media; Resume reconnects at the pending question and reopens the camera if monitoring consent is still checked.</p>
-<button id="check-mic" type="button">Check microphone</button> <meter id="check-level" min="0" max="1" value="0" aria-label="Microphone check"></meter>
-<button id="check-speaker" type="button">Play speaker test</button>
-<label><input id="speaker-confirmed" type="checkbox" style="width:auto"> I heard the test tone.</label>
-<button id="preview-camera" type="button">Preview camera locally</button>
-<video id="camera-preview" autoplay muted playsinline style="display:block;max-width:480px;width:100%;max-height:270px;margin-top:12px"></video>
-<p>With your consent, this browser checks for face absence, multiple visible faces, and sustained position changes. Images stay on this device and are not recorded or uploaded. Only neutral event counts, timing, confidence, and monitoring status are sent to this interview server. These observations can be wrong or manipulated and do not affect technical ratings or make hiring decisions.</p>
-<p id="phone-monitoring-info">Phone detection availability will appear here. When enabled, possible visible-phone sightings and per-detector analysis summaries are sent for human review. This does not establish phone use or intent.</p>
-<label><input id="camera-consent" type="checkbox" style="width:auto"> I consent to local face analysis, mobile-phone detection when enabled, and sending compact observations and coverage summaries.</label>
-<p id="monitoring-status" role="status">Monitoring has not started. You may continue with voice if camera monitoring is unavailable or declined.</p>
-<button id="ready-interview" type="button">Devices checked — prepare interview</button>
-</section>
-<section id="conversation" data-state="idle" class="demo">
-<p id="status" role="status">Complete the device checks to start.</p>
-<meter id="mic-level" min="0" max="1" value="0" aria-label="Voice microphone activity"></meter>
-<div id="transcript" class="transcript" aria-live="polite"><p id="empty">Questions and your words will appear here.</p></div>
-<p id="error" class="err" role="alert" hidden></p>
-<button id="audio-enable" hidden>Enable audio</button><button id="retry-save" hidden>Retry saving</button>
-<p id="history" hidden><a id="history-link"></a></p>
-<div class="controls"><button id="start" disabled>Start interview</button><button id="mute" disabled aria-pressed="false">Mute</button><button id="end" disabled>Pause</button></div>
-<button id="abandon" class="secondary">End interview permanently</button>
-<p id="input-device"></p><audio id="bot-audio" autoplay playsinline></audio>
-</section></main>
+<main id="candidate-root" data-session-id="{{ session_id }}" data-mode="preparation">
+  <header class="candidate-heading"><p class="eyebrow">YOUR INTERVIEW</p><h1 id="interview-title">Preparing interview…</h1><p id="interview-info" aria-live="polite"></p><span id="connection-state" class="badge neutral" role="status">Not connected</span></header>
+  <p id="preparation-status" class="workspace-message" role="status"></p>
+  <div class="candidate-layout">
+    <section class="panel" id="device-check" aria-labelledby="device-heading">
+      <h2 id="device-heading">Before you begin</h2><p class="hint device-intro">Use headphones if possible and choose a quiet space. Answer after the interviewer stops speaking.</p>
+      <details id="device-settings" class="device-settings" open><summary>Device checks &amp; preparation</summary><div class="device-checklist">
+        <div class="device-item"><h3>01 · Microphone</h3><p class="hint">Allow access, then speak to check the activity level.</p><div class="actions"><button id="check-mic" class="secondary" type="button">Check microphone</button><meter id="check-level" min="0" max="1" value="0" aria-label="Microphone check"></meter></div></div>
+        <div class="device-item"><h3>02 · Speaker</h3><p class="hint">Play the tone and confirm that you can hear it.</p><button id="check-speaker" class="secondary" type="button">Play speaker test</button><label class="checkbox-label"><input id="speaker-confirmed" type="checkbox"> I heard the test tone.</label></div>
+        <div><h3>03 · Prepare interview</h3><p class="hint">Microphone check and speaker confirmation are required. Camera monitoring is optional.</p><button id="ready-interview" type="button">Devices checked — prepare interview</button></div>
+      </div></details><p class="hint">Pause closes media. Resume reconnects at the pending question and reopens the camera if monitoring consent is still checked.</p>
+    </section>
+    <aside class="panel camera-column" aria-labelledby="camera-heading">
+      <div class="section-heading"><h2 id="camera-heading">Your camera</h2><span class="hint">LOCAL ANALYSIS</span></div>
+      <div class="camera-stage"><video id="camera-preview" autoplay muted playsinline aria-label="Your local camera preview"></video></div><div class="camera-caption"><span>Preview stays on this device</span></div><p><button id="preview-camera" class="secondary" type="button">Preview camera locally</button></p>
+      <p class="privacy-note">Camera frames are processed locally and are not recorded or uploaded.</p>
+      <details><summary>Monitoring &amp; privacy</summary><p class="privacy-note">With consent, this browser checks for face absence, multiple visible faces, and sustained position changes. Only neutral event counts, timing, confidence, and monitoring status are sent to this interview server. Observations can be wrong or manipulated and do not affect technical ratings or make hiring decisions.</p><p id="phone-monitoring-info" class="privacy-note">Phone detection availability will appear here. When enabled, possible visible-phone sightings and per-detector analysis summaries are sent for human review. This does not establish phone use or intent.</p><p class="privacy-note">Audio is processed by Sarvam; transcript and interview context are processed by Cerebras. Voice processing uses external providers.</p></details>
+      <label class="checkbox-label"><input id="camera-consent" type="checkbox"> I consent to local face analysis, mobile-phone detection when enabled, and sending compact observations and coverage summaries.</label><p id="monitoring-status" role="status">Monitoring has not started. You may continue with voice if camera monitoring is unavailable or declined.</p>
+    </aside>
+    <section id="conversation" data-state="idle" class="demo candidate-conversation" aria-label="Interview conversation">
+      <div class="conversation-panel">
+        <div class="current-prompt"><p class="eyebrow">INTERVIEWER · LATEST SPOKEN PROMPT</p><h2 id="current-question">Your first question will appear when the interviewer speaks.</h2><p class="hint">Only spoken interviewer text is shown here. Open the transcript for the full conversation.</p><div class="state-indicator"><span class="status-dot" aria-hidden="true"></span><p id="status" role="status">Complete the device checks to start.</p></div><div class="mic-activity"><span>Microphone activity</span><meter id="mic-level" min="0" max="1" value="0" aria-label="Voice microphone activity"></meter></div><p id="gate-explanation" class="gate-explanation">The interviewer listens after its greeting and between replies.</p></div>
+        <details class="transcript-drawer"><summary>Conversation transcript</summary><div id="transcript" class="transcript" aria-label="Conversation transcript" aria-live="polite" tabindex="0"><p id="empty">Questions and your words will appear here.</p></div></details>
+      </div>
+      <footer class="conversation-footer"><p id="error" class="err" role="alert" hidden></p><div class="recovery-actions"><button id="audio-enable" class="recovery-button" type="button" hidden>Enable audio</button><button id="retry-save" class="recovery-button" type="button" hidden>Retry saving</button><p id="history" hidden><a id="history-link"></a></p></div>
+        <div class="controls" role="group" aria-label="Interview controls"><button id="start" class="start-button" type="button" disabled>Start interview</button><button id="mute" class="mute-button" type="button" disabled aria-pressed="false">Mute</button><button id="end" class="mute-button" type="button" disabled>Pause</button><button id="abandon" class="danger" type="button">End interview permanently</button></div><p id="input-device" class="hint"></p>
+      </footer><audio id="bot-audio" autoplay playsinline></audio>
+    </section>
+  </div>
+</main>
 {% endblock %}
