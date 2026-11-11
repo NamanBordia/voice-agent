@@ -11,6 +11,7 @@ let savedDefinitions = [];
 const candidateLinks = new Map();
 const status = (message, tone = 'info') => { el('workspace-status').textContent = message; el('workspace-status').dataset.tone = tone; };
 async function request(path, method = 'GET', body) {
+  if (globalThis.workspaceRequest) return globalThis.workspaceRequest(path, method, body);
   const response = await fetch(path, { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
   const result = await response.json();
   if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : JSON.stringify(result.detail));

@@ -52,8 +52,9 @@ test('microphone meter accepts only finite levels in its zero-to-one range', asy
   assert.equal(shown, 0); // Old connection callbacks cannot revive the reset meter.
 });
 
-async function page({ denied = false, participation = undefined, connectFailure = false } = {}) {
+async function page({ denied = false, participation = undefined, workspace = undefined, connectFailure = false } = {}) {
   globalThis.interviewParticipation = participation;
+  globalThis.workspaceVoice = workspace;
   const ids = ['conversation', 'start', 'mute', 'end', 'bot-audio', 'mic-level', 'transcript', 'status', 'error', 'empty', 'audio-enable', 'history', 'history-link', 'retry-save', 'input-device'];
   const elements = Object.fromEntries(ids.map((id) => [id, new Element()]));
   globalThis.document = { getElementById: (id) => elements[id], createElement: () => new Element() };
@@ -80,6 +81,23 @@ async function page({ denied = false, participation = undefined, connectFailure 
   await import(`data:text/javascript;base64,${Buffer.from(`${source}\n// case ${moduleId++}`).toString('base64')}`);
   return { elements, client: () => current };
 }
+
+test('hosted Talk keeps its normal mic gating and saves through the paired workspace API', async () => {
+  const calls = []; const endpoint = new Request('http://127.0.0.1:8000/api/offer', { headers: { Authorization: 'Bearer paired' } });
+  const { elements, client } = await page({ workspace: {
+    offerRequest: { endpoint }, headers: { Authorization: 'Bearer paired' },
+    endEndpoint: (sid) => `http://127.0.0.1:8000/api/sessions/${sid}/end`,
+    fetch: async (url, options) => { calls.push({ url, options }); return Response.json({ saved: true, history_url: `/calls/browser_${'a'.repeat(32)}` }); },
+  } });
+  await elements.start.handlers.click();
+  assert.equal(client().connectParams.webrtcRequestParams.endpoint, endpoint);
+  client().callbacks.onBotStartedSpeaking(); assert.equal(client().micChanges.at(-1), false);
+  client().callbacks.onBotStoppedSpeaking(); assert.equal(client().micChanges.at(-1), true);
+  elements.end.handlers.click(); await settle();
+  assert.match(calls[0].url, /http:\/\/127\.0\.0\.1:8000\/api\/sessions\/browser_[a-f0-9]{32}\/end/);
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer paired');
+  assert.match(elements['history-link'].href, /^\/calls\/browser_/);
+});
 
 test('candidate connection failure cleans up the scoped runner before receiving a call SID', async () => {
   let ended = 0; let transports = 0; const requests = [];

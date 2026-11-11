@@ -54,7 +54,8 @@ def _parse_config_form(form: Any, base: RuntimeConfig) -> RuntimeConfig:
                    "summary_update_every_turns": "mem_summary_update_every_turns",
                    "recall_min_overlap": "mem_recall_min_overlap", "max_memory_block_tokens": "mem_max_memory_block_tokens"},
         "ops": {"debug_log_level": "debug_log_level", "browser_ready_timeout_secs": "browser_ready_timeout_secs",
-                "shutdown_timeout_secs": "shutdown_timeout_secs", "candidate_frontend_origin": "candidate_frontend_origin"},
+                "shutdown_timeout_secs": "shutdown_timeout_secs", "candidate_frontend_origin": "candidate_frontend_origin",
+                "workspace_frontend_origin": "workspace_frontend_origin"},
     }
     for group, mapping in fields.items():
         for key, field in mapping.items():
@@ -71,7 +72,10 @@ async def post_config(request: Request) -> HTMLResponse:
     status, error, saved = 200, None, False
     try:
         updated = _parse_config_form(await request.form(), base)
+        origin_changed = updated.ops.workspace_frontend_origin != base.ops.workspace_frontend_origin
         base = await save_runtime_config(updated)
+        if origin_changed:
+            request.app.state.workspace_pairing.revoke()
         saved = True
     except ValidationError as exc:
         status = 422
@@ -309,9 +313,8 @@ def _memory_summary(records: list[dict[str, Any]]) -> dict[str, Any] | None:
     }
 
 
-@router.get("/calls", response_class=HTMLResponse)
-async def get_calls_list(request: Request) -> HTMLResponse:
-    """Render the completed-calls list with per-call latency stats."""
+async def calls_context() -> dict[str, Any]:
+    """Build the shared local/hosted history list and timing summaries."""
     logs, db_connected = await _fetch_recent_logs()
     for log in logs:
         records = log.get("metrics", {}).get("turn_records", [])
@@ -324,11 +327,24 @@ async def get_calls_list(request: Request) -> HTMLResponse:
         log["total_ms"] = total["median"]
         log["turn_count"] = log.get("metrics", {}).get("turn_count", len(records))
         log["measured_latency_turns"] = resp["n"]
+    return {"logs": logs, "db_connected": db_connected}
+
+
+@router.get("/calls", response_class=HTMLResponse)
+async def get_calls_list(request: Request) -> HTMLResponse:
+    """Render the completed-calls list with per-call latency stats."""
     return templates.TemplateResponse(
         request=request,
         name="calls.html",
-        context={"logs": logs, "db_connected": db_connected},
+        context=await calls_context(),
     )
+
+
+def call_context(log: dict[str, Any]) -> dict[str, Any]:
+    """Build shared detail summaries without changing the saved record."""
+    records = log.get("metrics", {}).get("turn_records", [])
+    return {"log": log, "turn_records": records, "latency": _latency_summary(records),
+            "eager_summary": _eager_probe_summary(records), "memory_summary": _memory_summary(records)}
 
 
 @router.get("/calls/{call_sid}", response_class=HTMLResponse)
@@ -345,15 +361,8 @@ async def get_call_detail(request: Request, call_sid: str) -> HTMLResponse:
     if log is None:
         return HTMLResponse("Conversation not found.", status_code=404)
 
-    records = log.get("metrics", {}).get("turn_records", [])
     return templates.TemplateResponse(
         request=request,
         name="call_detail.html",
-        context={
-            "log": log,
-            "turn_records": records,
-            "latency": _latency_summary(records),
-            "eager_summary": _eager_probe_summary(records),
-            "memory_summary": _memory_summary(records),
-        },
+        context=call_context(log),
     )

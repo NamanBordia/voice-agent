@@ -6,9 +6,10 @@ Sarvam realtime STT, Cerebras Qwen 3.8 27B with reasoning disabled, and Sarvam B
 
 No Exotel account, phone call, public tunnel, React server, or MongoDB is needed.
 
-For a static candidate page on Vercel with FastAPI still on the same laptop, see
-[Vercel candidate setup](docs/VERCEL_CANDIDATE.md). The separate `build:static`
-outputs only public candidate assets to `frontend/dist/`; recruiter management stays local.
+For the full static frontend on Vercel with FastAPI still on the same laptop, see
+[Vercel workspace setup](docs/VERCEL_WORKSPACE.md). The separate `build:static`
+outputs public workspace/candidate assets to `frontend/dist/`; paired API access
+keeps keys, interview processing and saved records on the laptop.
 
 ## Run locally
 

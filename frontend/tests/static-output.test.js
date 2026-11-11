@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { candidateHtml, auditStaticOutput } from '../static-output.mjs';
+import { candidateHtml, workspaceHtml, auditStaticOutput } from '../static-output.mjs';
 
 test('static candidate shell reuses current UI and exposes no recruiter controls or Jinja', async () => {
   const template = await readFile(new URL('../../app/templates/candidate.html', import.meta.url), 'utf8');
@@ -16,6 +16,24 @@ test('static candidate shell reuses current UI and exposes no recruiter controls
   assert.ok(!html.includes('upgrade-insecure-requests'));
   assert.match(html, /name="referrer" content="no-referrer"/);
   assert.throws(() => candidateHtml(template.replace('id="camera-preview"', 'id="camera-preview" {{ new_server_data }}'), shell, 'http://127.0.0.1:8000'));
+});
+
+test('hosted workspace reuses builder and Talk UI and generates data-free settings controls', async () => {
+  const shell = await readFile(new URL('../workspace-shell.html', import.meta.url), 'utf8');
+  for (const [page, source] of [['interviews', 'interviews'], ['talk', 'demo'], ['config', 'config']]) {
+    const template = await readFile(new URL(`../../app/templates/${source}.html`, import.meta.url), 'utf8');
+    const html = workspaceHtml(template, shell, 'http://127.0.0.1:8000', page);
+    assert.ok(!/{[{%#]/.test(html)); assert.match(html, new RegExp(`data-page="${page}"`));
+    assert.match(html, /href="\/talk"/); assert.match(html, /id="workspace-code" type="password"/);
+    if (page === 'interviews') { assert.match(html, /id="create-interview"/); assert.match(html, /id="plan-editor"/); }
+    if (page === 'talk') { for (const id of ['start', 'end', 'mute', 'bot-audio', 'retry-save']) assert.match(html, new RegExp(`id="${id}"`)); }
+    if (page === 'config') {
+      assert.match(html, /data-config-field="prompt.system_prompt"/);
+      assert.match(html, /data-config-field="tts.voice_id"/);
+      assert.ok(!html.includes('hx-post=')); assert.ok(!html.includes('id="workspace-pair"'));
+      assert.ok(!html.includes('readonly autocomplete="off"'));
+    }
+  }
 });
 
 test('static output audit refuses private or unexpected files rather than publishing them', async () => {

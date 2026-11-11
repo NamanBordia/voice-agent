@@ -14,6 +14,6 @@ export async function bundleBrowserEntry(entry, output, apiBase) {
     outfile: fileURLToPath(new URL(`${entry}.js`, output)), bundle: true, minify: true,
     format: entry === 'camera-worker' ? 'iife' : 'esm', target: ['chrome120', 'firefox121', 'safari17'],
     define: apiBase === undefined ? {} : { __CANDIDATE_API_BASE_URL__: JSON.stringify(apiBase) },
-    plugins: apiBase === undefined ? [] : [sdkLoopbackPlugin(entry === 'candidate' || entry === 'demo')],
+    plugins: apiBase === undefined ? [] : [sdkLoopbackPlugin(['candidate', 'demo', 'workspace'].includes(entry))],
   });
 }

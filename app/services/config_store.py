@@ -32,12 +32,17 @@ class ConfigStore:
             self._config = config
             return config.model_copy(deep=True)
 
-    async def save(self, config: RuntimeConfig) -> RuntimeConfig:
+    async def save(self, config: RuntimeConfig, *, preserve_access_origins: bool = False) -> RuntimeConfig:
         """Finish replacement/cache update even when the request is canceled."""
         validated = RuntimeConfig.model_validate(config.model_dump(mode="json"))
 
         async def write() -> RuntimeConfig:
             async with self._lock:
+                # A hosted behavior save must not undo a concurrent local access
+                # approval/revocation while waiting for this serialization lock.
+                if preserve_access_origins and self._config is not None:
+                    validated.ops.candidate_frontend_origin = self._config.ops.candidate_frontend_origin
+                    validated.ops.workspace_frontend_origin = self._config.ops.workspace_frontend_origin
                 await storage.write_config(validated)
                 self._config = validated
                 return validated.model_copy(deep=True)

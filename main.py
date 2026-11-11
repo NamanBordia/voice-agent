@@ -17,11 +17,13 @@ from app.logging_config import setup_logging
 from app.routers.browser import router as browser_router
 from app.routers.dashboard import router as dashboard_router
 from app.routers.interviews import router as interview_router
+from app.routers.workspace import router as workspace_router
 from app.interviews.service import InterviewService
 from app.services.browser_session import BrowserSessionManager
 from app.services.runtime_config import close_runtime_config, seed_runtime_config_if_missing
 from app.services.warmup import run_local_warmup
 from app.services.candidate_cors import CandidateCORSMiddleware, approved_candidate_origin
+from app.services.workspace_access import WorkspaceCORSMiddleware, WorkspacePairing
 
 STATIC_DIR = Path(__file__).resolve().parent / "app" / "static"
 
@@ -31,7 +33,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Initialize local resources; provider sockets are opened only per conversation."""
     setup_logging()
     settings = get_settings()
-    for asset in ("demo.js", "htmx.min.js", "recruiter.js", "candidate.js", "camera-worker.js"):
+    for asset in ("demo.js", "htmx.min.js", "recruiter.js", "candidate.js", "camera-worker.js", "workspace-pairing.js"):
         if not (STATIC_DIR / asset).is_file():
             raise RuntimeError("Browser assets missing. Run npm --prefix frontend ci and npm --prefix frontend run build")
     config = await seed_runtime_config_if_missing(settings)
@@ -44,17 +46,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        app.state.workspace_pairing.revoke()
         await manager.close()
         await close_runtime_config()
 
 
 def create_app() -> FastAPI:
-    """Create the local application with opt-in hosted candidate access."""
+    """Create the loopback application with opt-in candidate and paired workspace access."""
     app = FastAPI(title="Browser Voice Agent", version="0.2.0", lifespan=lifespan)
+    app.state.workspace_pairing = WorkspacePairing()
 
     @app.middleware("http")
     async def same_origin(request: Request, call_next: RequestResponseEndpoint) -> Response:
-        """Keep management local and permit only scoped, approved candidate origins."""
+        """Keep access on loopback and permit only approved candidate or paired APIs."""
         candidate_path = request.url.path.startswith(("/candidate/", "/api/candidate/", "/static/"))
         if not candidate_path:
             try:
@@ -74,7 +78,8 @@ def create_app() -> FastAPI:
         if origin and (request.method in {"POST", "PATCH", "PUT", "DELETE"} or not candidate_path):
             parsed = urlsplit(origin)
             if parsed.scheme != request.url.scheme or parsed.netloc != request.headers.get("host"):
-                if not (request.url.path.startswith("/api/candidate/") and approved_candidate_origin(request.scope, origin)):
+                if not (getattr(request.state, "hosted_workspace_authorized", False)
+                        or (request.url.path.startswith("/api/candidate/") and approved_candidate_origin(request.scope, origin))):
                     return JSONResponse({"detail": "Use the application's own browser page"}, status_code=403)
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
@@ -93,9 +98,11 @@ def create_app() -> FastAPI:
         return response
 
     app.add_middleware(CandidateCORSMiddleware)
+    app.add_middleware(WorkspaceCORSMiddleware, pairing=app.state.workspace_pairing)
     app.include_router(browser_router)
     app.include_router(dashboard_router)
     app.include_router(interview_router)
+    app.include_router(workspace_router)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR), check_dir=False), name="static")
     return app
 

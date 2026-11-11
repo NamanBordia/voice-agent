@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="__CANDIDATE_CSP__">
+  <title>Voice Agent — Interview workspace</title>
+  <link rel="stylesheet" href="/static/base.css">
+  <link rel="stylesheet" href="/static/studio.css">
+  <link rel="stylesheet" href="/static/talk.css">
+  <script type="module" src="/static/workspace.js"></script>
+</head>
+<body class="workspace-page" data-page="__WORKSPACE_PAGE__">
+<a class="skip-link" href="#page-content">Skip to content</a>
+<div class="wrap">
+  <nav class="topnav" aria-label="Main navigation">
+    <a class="brand" href="/interviews"><span class="brand-mark" aria-hidden="true">V</span><span>Voice Agent<small>Interview workspace</small></span></a>
+    <span class="nav-caption">WORKSPACE</span>
+    <a href="/interviews">Interviews</a><a href="/talk">Talk</a>
+    <a href="/calls">Calls &amp; history</a><a href="/config">Configuration</a>
+    <span class="spacer"></span>
+    <div class="nav-footer">Hosted interface<small>Backend and records on this laptop</small></div>
+  </nav>
+  <div id="page-content" tabindex="-1">
+    <section class="panel" aria-labelledby="connection-heading">
+      <h2 id="connection-heading">Connect to your local workspace</h2>
+      <p>Start FastAPI on this laptop. At <a href="http://127.0.0.1:8000/config" target="_blank" rel="noreferrer noopener">local Configuration</a>, save this site's origin in both hosted origin fields, then create a temporary recruiter pairing code.</p>
+      <p>Your hosted origin: <code id="workspace-origin"></code></p>
+      <form id="workspace-connect-form">
+        <label for="workspace-code">Recruiter pairing code</label><input id="workspace-code" type="password" autocomplete="off" required>
+        <button id="workspace-connect" type="submit">Connect to local backend</button>
+        <button id="workspace-disconnect" type="button" class="secondary">Disconnect this tab</button>
+      </form>
+      <p id="workspace-connection-status" role="status" aria-live="polite">Not connected. Allow Chrome's local network / apps-on-device permission when prompted.</p>
+    </section>
+    <main id="workspace-content" hidden><!-- WORKSPACE_CONTENT --></main>
+  </div>
+</div>
+</body>
+</html>

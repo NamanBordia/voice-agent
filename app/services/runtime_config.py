@@ -24,9 +24,9 @@ async def seed_runtime_config_if_missing(settings: Settings | None = None) -> Ru
     return await _store.load()
 
 
-async def save_runtime_config(config: RuntimeConfig) -> RuntimeConfig:
+async def save_runtime_config(config: RuntimeConfig, *, preserve_access_origins: bool = False) -> RuntimeConfig:
     """Serialize a validated settings save and refresh the cache."""
-    return await _store.save(config)
+    return await _store.save(config, preserve_access_origins=preserve_access_origins)
 
 
 async def close_runtime_config() -> None:

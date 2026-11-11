@@ -10,7 +10,10 @@ const audio = /** @type {HTMLAudioElement} */ (element('bot-audio'));
 const meter = /** @type {HTMLMeterElement} */ (element('mic-level'));
 const transcript = element('transcript');
 const participation = globalThis.interviewParticipation || null;
-const endEndpoint = (sid) => participation?.endEndpoint || `/api/sessions/${encodeURIComponent(sid)}/end`;
+const workspace = globalThis.workspaceVoice || null;
+const request = (...args) => (participation?.fetch || workspace?.fetch || fetch)(...args);
+const requestHeaders = () => participation?.headers || workspace?.headers;
+const endEndpoint = (sid) => participation?.endEndpoint || workspace?.endEndpoint(sid) || `/api/sessions/${encodeURIComponent(sid)}/end`;
 let thinking = false;
 let client = null;
 let generation = 0;
@@ -111,8 +114,8 @@ function resetControls() {
 
 async function saveConversation(sid) {
   pendingSaveSid = sid;
-  const response = await (participation?.fetch || fetch)(endEndpoint(sid), {
-    method: 'POST', headers: participation?.headers, signal: AbortSignal.timeout(65000),
+  const response = await request(endEndpoint(sid), {
+    method: 'POST', headers: requestHeaders(), signal: AbortSignal.timeout(65000),
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.detail || 'Could not confirm cleanup.');
@@ -265,7 +268,7 @@ startButton.addEventListener('click', async () => {
     if (!valid()) return;
     endButton.disabled = false; // Allows canceling a connection before a session ID arrives.
     status('Connecting…', 'connecting');
-    await active.connect({ webrtcRequestParams: participation?.offerRequest || { endpoint: participation?.offerEndpoint || '/api/offer', headers: participation?.headers } });
+    await active.connect({ webrtcRequestParams: participation?.offerRequest || workspace?.offerRequest || { endpoint: participation?.offerEndpoint || '/api/offer', headers: participation?.headers } });
   } catch (cause) {
     if (!valid()) return;
     error(cause.message || 'Connection failed. Check microphone permissions and Settings.');
@@ -304,6 +307,6 @@ window.addEventListener('pagehide', () => {
   client?.enableMic(false);
   participation?.onPageHide?.();
   const cleanupSid = callSid || (client && participation?.sessionId);
-  if (cleanupSid) void (participation?.fetch || fetch)(endEndpoint(cleanupSid), { method: 'POST', headers: participation?.headers, keepalive: true }).catch(() => {});
+  if (cleanupSid) void request(endEndpoint(cleanupSid), { method: 'POST', headers: requestHeaders(), keepalive: true }).catch(() => {});
   void client?.disconnect().catch(() => {});
 });

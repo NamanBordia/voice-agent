@@ -1,6 +1,7 @@
 {% extends "_base.html" %}
 {% block title %}Voice Agent — Config{% endblock %}
 {% block head %}<script src="/static/htmx.min.js"></script>
+<script type="module" src="/static/workspace-pairing.js"></script>
 <script>
   document.addEventListener('htmx:beforeSwap', function (event) {
     if ([422, 503].includes(event.detail.xhr.status)) {
@@ -105,12 +106,27 @@
       <p class="hint">How long End waits before offering Retry saving. Cleanup continues until the pipeline has finished.</p>
       <label for="config-candidate_frontend_origin">Hosted candidate origin (optional)</label><input id="config-candidate_frontend_origin" name="candidate_frontend_origin" value="{{ config.ops.candidate_frontend_origin }}" placeholder="https://your-project.vercel.app" />
       <p class="hint">Paste the exact production HTTPS origin Vercel assigns, without a trailing slash. Blank disables cross-origin access. Only candidate APIs accept it; recruiter pages stay local. Takes effect after saving.</p>
+      <label for="config-workspace_frontend_origin">Hosted workspace origin (optional)</label><input id="config-workspace_frontend_origin" name="workspace_frontend_origin" value="{{ config.ops.workspace_frontend_origin }}" placeholder="https://your-project.vercel.app" />
+      <p class="hint">Save the exact production origin here and in Hosted candidate origin to use the full hosted frontend. Recruiter access also requires temporary pairing below. Blank disables hosted recruiter access.</p>
       <p class="hint">Set <code>DEBUG</code> to inspect transcription and turn diagnostics.</p>
     </fieldset>
 
     <p class="hint">Choose a Sarvam streaming voice ID before starting your first conversation.</p>
     <button type="submit">Save config</button>
   </form>
+
+  <!-- LOCAL_PAIRING_START -->
+  <section class="panel" aria-labelledby="pairing-heading">
+    <h2 id="pairing-heading">Pair the hosted workspace</h2>
+    <p>After saving the hosted workspace origin, create a temporary code here. Paste it into the hosted site's connection panel. Codes expire after two hours; creating a new one, revoking access or restarting FastAPI invalidates the previous code.</p>
+    <button id="workspace-pair" type="button">Create pairing code</button>
+    <button id="workspace-revoke" type="button" class="secondary">Revoke hosted access</button>
+    <label for="workspace-pair-code">Temporary recruiter pairing code</label>
+    <input id="workspace-pair-code" type="password" readonly autocomplete="off" />
+    <button id="workspace-copy" type="button" class="secondary">Copy code</button>
+    <p id="workspace-pair-status" role="status" aria-live="polite"></p>
+  </section>
+  <!-- LOCAL_PAIRING_END -->
 
 </section>
 {% endblock %}

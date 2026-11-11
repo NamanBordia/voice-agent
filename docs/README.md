@@ -8,7 +8,8 @@ The application is a single-user local browser voice agent with SmallWebRTC and 
 | [Interviews](INTERVIEWS.md) | Recruiter setup, candidate workflow, camera privacy, recovery, reports, and manual checks. |
 | [Interview system explained](INTERVIEW_SYSTEM_EXPLAINED.md) | Presentation guide: complete workflow, component connections, speech/vision models, data flow, reports and prototype limitations. |
 | [UI redesign](UI_REDESIGN.md) | Indigo/slate presentation update, files, verification and manual review boundaries. |
-| [Vercel candidate frontend](VERCEL_CANDIDATE.md) | Static-only deployment, loopback API, exact-origin CORS, candidate links and Chrome smoke test. |
+| [Vercel full frontend](VERCEL_WORKSPACE.md) | Hosted recruiter/candidate pages, temporary local pairing, deployment settings and Chrome smoke test. |
+| [Vercel workspace plan](VERCEL_WORKSPACE_PLAN.md) | Approved expansion of the initial candidate-only deployment. |
 | [ADR-007](decisions/ADR_007_SINGLE_INTERVIEW.md) | Approved single-interview boundaries and dependency. |
 | [Sarvam migration](SARVAM_MIGRATION.md) | Provider compatibility, startup, and five-language manual checks. |
 | [CONFIGURATION](CONFIGURATION.md) | Local settings, defaults, validation, and snapshots. |

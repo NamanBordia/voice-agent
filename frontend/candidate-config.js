@@ -45,6 +45,6 @@ export function candidateOfferRequest(url, jsonHeaders, apiBase) {
 
 export function sdkCandidateFetch(input, init, apiBase = PUBLIC_API_BASE_URL, fetcher = globalThis.fetch) {
   const url = input instanceof Request ? input.url : String(input);
-  return apiBase && url.startsWith(`${apiBase}/api/candidate/`)
+  return apiBase && (url.startsWith(`${apiBase}/api/candidate/`) || url === `${apiBase}/api/offer`)
     ? fetchCandidate(input, init, apiBase, fetcher) : fetcher(input, init);
 }

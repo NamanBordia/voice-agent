@@ -109,8 +109,9 @@ class OpsCfg(RuntimeModel):
     browser_ready_timeout_secs: float = Field(default=30.0, ge=5, le=120)
     shutdown_timeout_secs: float = Field(default=30.0, ge=1, le=60)
     candidate_frontend_origin: str = Field(default="", max_length=300)
+    workspace_frontend_origin: str = Field(default="", max_length=300)
 
-    @field_validator("candidate_frontend_origin")
+    @field_validator("candidate_frontend_origin", "workspace_frontend_origin")
     @classmethod
     def validate_candidate_frontend_origin(cls, value: str) -> str:
         """Allow one explicit HTTPS frontend origin; blank disables hosted access."""

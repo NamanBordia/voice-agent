@@ -1,6 +1,6 @@
 # Single-interview workflow
 
-Optional static candidate hosting is documented in [Vercel candidate setup](VERCEL_CANDIDATE.md).
+Optional full static frontend hosting is documented in [Vercel workspace setup](VERCEL_WORKSPACE.md).
 It retains this local workflow and the existing authorized APIs; only the candidate UI
 is hosted, with explicit CORS to FastAPI on the same laptop.
 

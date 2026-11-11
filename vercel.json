@@ -4,7 +4,14 @@
   "installCommand": "npm --prefix frontend ci",
   "buildCommand": "npm --prefix frontend run build:static",
   "outputDirectory": "frontend/dist",
-  "rewrites": [{ "source": "/candidate/:sessionId", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/interviews", "destination": "/index.html" },
+    { "source": "/talk", "destination": "/talk.html" },
+    { "source": "/config", "destination": "/config.html" },
+    { "source": "/calls", "destination": "/calls.html" },
+    { "source": "/calls/:callSid", "destination": "/call.html" },
+    { "source": "/candidate/:sessionId", "destination": "/candidate.html" }
+  ],
   "headers": [
     { "source": "/(.*)", "headers": [
       { "key": "Referrer-Policy", "value": "no-referrer" },
