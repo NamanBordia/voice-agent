@@ -19,8 +19,7 @@ export function workspaceHtml(template, shell, apiBase, page) {
   let content = template?.match(/{% block content %}([\s\S]*?){% endblock %}/)?.[1] || '';
   if (['interviews', 'talk', 'config'].includes(page) && !content) throw new Error('Missing workspace template content.');
   if (page === 'config') {
-    content = content.replace(/<!-- LOCAL_PAIRING_START -->[\s\S]*?<!-- LOCAL_PAIRING_END -->/, '')
-      .replace(/{% if (?:saved|error) %}[\s\S]*?{% endif %}/g, '')
+    content = content.replace(/{% if (?:saved|error) %}[\s\S]*?{% endif %}/g, '')
       .replace(/\s+hx-[\w-]+="[^"]*"/g, '');
     content = content.replace(/<select([^>]*)>([\s\S]*?)<\/select>/g, (_, attrs, body) => {
       const field = body.match(/config\.(\w+\.\w+)/)?.[1];

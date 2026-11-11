@@ -23,7 +23,7 @@ from app.services.browser_session import BrowserSessionManager
 from app.services.runtime_config import close_runtime_config, seed_runtime_config_if_missing
 from app.services.warmup import run_local_warmup
 from app.services.candidate_cors import CandidateCORSMiddleware, approved_candidate_origin
-from app.services.workspace_access import WorkspaceCORSMiddleware, WorkspacePairing
+from app.services.workspace_access import WorkspaceCORSMiddleware
 
 STATIC_DIR = Path(__file__).resolve().parent / "app" / "static"
 
@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Initialize local resources; provider sockets are opened only per conversation."""
     setup_logging()
     settings = get_settings()
-    for asset in ("demo.js", "htmx.min.js", "recruiter.js", "candidate.js", "camera-worker.js", "workspace-pairing.js"):
+    for asset in ("demo.js", "htmx.min.js", "recruiter.js", "candidate.js", "camera-worker.js"):
         if not (STATIC_DIR / asset).is_file():
             raise RuntimeError("Browser assets missing. Run npm --prefix frontend ci and npm --prefix frontend run build")
     config = await seed_runtime_config_if_missing(settings)
@@ -46,19 +46,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        app.state.workspace_pairing.revoke()
         await manager.close()
         await close_runtime_config()
 
 
 def create_app() -> FastAPI:
-    """Create the loopback application with opt-in candidate and paired workspace access."""
+    """Create the loopback application with opt-in candidate and workspace access."""
     app = FastAPI(title="Browser Voice Agent", version="0.2.0", lifespan=lifespan)
-    app.state.workspace_pairing = WorkspacePairing()
 
     @app.middleware("http")
     async def same_origin(request: Request, call_next: RequestResponseEndpoint) -> Response:
-        """Keep access on loopback and permit only approved candidate or paired APIs."""
+        """Keep access on loopback and permit only approved cross-origin APIs."""
         candidate_path = request.url.path.startswith(("/candidate/", "/api/candidate/", "/static/"))
         if not candidate_path:
             try:
@@ -98,7 +96,7 @@ def create_app() -> FastAPI:
         return response
 
     app.add_middleware(CandidateCORSMiddleware)
-    app.add_middleware(WorkspaceCORSMiddleware, pairing=app.state.workspace_pairing)
+    app.add_middleware(WorkspaceCORSMiddleware)
     app.include_router(browser_router)
     app.include_router(dashboard_router)
     app.include_router(interview_router)

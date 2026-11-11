@@ -1,45 +1,16 @@
-"""Paired workspace data APIs; secrets and local access controls stay on the laptop."""
+"""Origin-restricted workspace APIs; secrets and access approvals remain local."""
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 from loguru import logger
 
 from app.models.runtime_config_models import RuntimeConfig
 from app.routers.dashboard import call_context, calls_context
 from app.services.runtime_config import load_runtime_config, save_runtime_config
-from app.services.workspace_access import PAIRING_LIFETIME_SECONDS, is_loopback_request
 from app.storage import CALL_SID_PATTERN, get_call_log
 
 router = APIRouter(prefix="/api/workspace")
-
-
-def require_local_pairing_page(request: Request) -> None:
-    """Only an explicit same-origin action from the local UI can issue/revoke a token."""
-    own_origin = f"{request.url.scheme}://{request.headers.get('host', '')}"
-    if (not is_loopback_request(request.scope) or request.headers.get("origin") != own_origin
-            or request.headers.get("content-type", "").split(";")[0] != "application/json"):
-        raise HTTPException(403, "Use pairing controls on the local Configuration page")
-
-
-@router.post("/pair")
-async def pair(request: Request) -> dict[str, Any]:
-    """Issue a temporary recruiter token once, exclusively to the local UI."""
-    require_local_pairing_page(request)
-    config = await load_runtime_config()
-    if not config.ops.workspace_frontend_origin:
-        raise HTTPException(409, "Save a hosted workspace origin in local Configuration first")
-    token = request.app.state.workspace_pairing.issue(config.ops.workspace_frontend_origin)
-    return {"token": token, "expires_in": PAIRING_LIFETIME_SECONDS,
-            "origin": config.ops.workspace_frontend_origin}
-
-
-@router.delete("/pair")
-async def revoke(request: Request) -> dict[str, bool]:
-    """Revoke hosted recruiter access without interrupting candidate participation."""
-    require_local_pairing_page(request)
-    request.app.state.workspace_pairing.revoke()
-    return {"revoked": True}
 
 
 @router.get("/config")

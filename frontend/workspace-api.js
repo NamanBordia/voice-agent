@@ -1,26 +1,30 @@
 import { PUBLIC_API_BASE_URL, candidateFetchOptions, fetchCandidate, candidateOfferRequest } from './candidate-config.js';
 
-export const PAIRING_HELP = 'Pair this workspace from local Configuration. Start FastAPI on this laptop, save this exact Vercel origin in Hosted workspace origin, create a pairing code and paste it here.';
-export const workspaceStorageKey = (apiBase) => `workspace-pairing-${apiBase}`;
+export const workspaceStorageKey = (apiBase) => `workspace-connected-${apiBase}`;
 
 function tabStorage() { try { return globalThis.sessionStorage; } catch { return undefined; } }
 
 export function workspaceClient({ apiBase = PUBLIC_API_BASE_URL, storage = tabStorage(),
-  fetcher = globalThis.fetch, onUnauthorized = () => {} } = {}) {
-  let token = '';
-  try { token = storage?.getItem(workspaceStorageKey(apiBase)) || ''; } catch { /* Ask for pairing again. */ }
-  const headers = () => ({ 'Content-Type': 'application/json', ...(apiBase ? { Authorization: `Bearer ${token}` } : {}) });
-  function setToken(value) { token = value.trim(); }
-  function retain() { try { storage?.setItem(workspaceStorageKey(apiBase), token); } catch { /* Current page remains usable. */ } }
-  function clear() { token = ''; try { storage?.removeItem(workspaceStorageKey(apiBase)); } catch { /* Memory is already cleared. */ } }
+  fetcher = globalThis.fetch, onAccessDenied = () => {}, onConnectionLost = () => {} } = {}) {
+  // Remove obsolete recruiter secrets left by the previous paired build.
+  try { storage?.removeItem(`workspace-pairing-${apiBase}`); } catch { /* Storage is optional. */ }
+  const headers = () => ({ 'Content-Type': 'application/json' });
+  function connected() { try { return storage?.getItem(workspaceStorageKey(apiBase)) === 'yes'; } catch { return false; } }
+  function retain() { try { storage?.setItem(workspaceStorageKey(apiBase), 'yes'); } catch { /* Current page remains usable. */ } }
+  function clear() { try { storage?.removeItem(workspaceStorageKey(apiBase)); } catch { /* No credentials are held. */ } }
   async function fetchPath(path, init = {}) {
     if (!/^\/api\/(?:interviews(?:\/|$)|workspace\/(?:config|calls)(?:\/|$)|offer$|sessions\/browser_[a-f0-9]{32}\/end$)/.test(path)) {
       throw new Error('Request is outside the recruiter workspace API.');
     }
-    const response = await fetchCandidate(`${apiBase}${path}`, {
-      ...init, headers: { ...headers(), ...init.headers },
-    }, apiBase, fetcher);
-    if (response.status === 401) { clear(); onUnauthorized(); throw new Error(PAIRING_HELP); }
+    let response;
+    try {
+      response = await fetchCandidate(`${apiBase}${path}`, {
+        ...init, headers: { ...headers(), ...init.headers },
+      }, apiBase, fetcher);
+    } catch (error) {
+      clear(); onConnectionLost(error); throw error;
+    }
+    if (response.status === 401 || response.status === 403) { clear(); onAccessDenied(); }
     return response;
   }
   async function request(path, method = 'GET', body) {
@@ -39,5 +43,5 @@ export function workspaceClient({ apiBase = PUBLIC_API_BASE_URL, storage = tabSt
         return fetchPath(url.pathname, init);
       } };
   }
-  return { request, fetch: fetchPath, headers, setToken, retain, clear, voice, networkOptions: candidateFetchOptions(apiBase) };
+  return { request, fetch: fetchPath, headers, connected, retain, clear, voice, networkOptions: candidateFetchOptions(apiBase) };
 }

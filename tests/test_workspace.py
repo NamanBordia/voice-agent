@@ -1,4 +1,4 @@
-"""Full hosted workspace access, pairing and data APIs without provider calls."""
+"""Full hosted workspace access and data APIs without provider calls."""
 
 from unittest.mock import AsyncMock, patch
 import asyncio
@@ -8,7 +8,6 @@ import pytest
 from pydantic import ValidationError
 
 from app.models.runtime_config_models import OpsCfg
-from app.services.workspace_access import WorkspacePairing
 from main import create_app
 from test_candidate_cors import activate
 
@@ -24,33 +23,31 @@ def client():
             yield local
 
 
-def pairing(client: TestClient) -> dict[str, str]:
-    """Explicitly approve the workspace locally and issue its separate credential."""
+def workspace_headers(client: TestClient) -> dict[str, str]:
+    """Explicitly approve the hosted origin locally; no recruiter code is required."""
     assert client.post("/config", data={"workspace_frontend_origin": ORIGIN}).status_code == 200
-    issued = client.post("/api/workspace/pair", headers=LOCAL, json={})
-    assert issued.status_code == 200
-    assert issued.json()["expires_in"] == 7200
-    return {"Origin": ORIGIN, "Authorization": f"Bearer {issued.json()['token']}"}
+    return {"Origin": ORIGIN}
 
 
-def test_pairing_is_local_explicit_and_never_candidate_access(client: TestClient) -> None:
-    assert client.post("/api/workspace/pair", headers=LOCAL, json={}).status_code == 409
-    auth = pairing(client)
-    for headers in ({}, {"Origin": ORIGIN}, {**LOCAL, "Host": "public.example"}):
-        assert client.post("/api/workspace/pair", headers=headers, json={}).status_code == 403
-    assert client.post("/api/workspace/pair", headers={**auth, "Content-Type": "application/json"}, json={}).status_code == 403
-    assert client.delete("/api/workspace/pair", headers=auth).status_code == 403
+def test_workspace_requires_origin_approval_but_no_code(client: TestClient) -> None:
+    assert client.get("/api/workspace/config", headers={"Origin": ORIGIN}).status_code == 403
     identity, candidate_auth = activate(client)
     client.post("/config", data={"candidate_frontend_origin": ORIGIN})
-    assert client.get(f"/api/candidate/{identity}", headers=auth).status_code == 403
-    assert client.get("/api/interviews", headers={**candidate_auth, "Origin": ORIGIN}).status_code == 401
-    assert client.get("/api/workspace/config", headers={"Origin": ORIGIN}).status_code == 401
+    assert client.get("/api/workspace/config", headers={"Origin": ORIGIN}).status_code == 403
+    assert client.get("/api/workspace/config", headers={**candidate_auth, "Origin": ORIGIN}).status_code == 403
+    auth = workspace_headers(client)
     assert client.get("/api/workspace/config", headers=auth).status_code == 200
+    assert client.get(f"/api/candidate/{identity}", headers=auth).status_code == 403
+    assert client.get(f"/api/candidate/{identity}", headers={**candidate_auth, "Origin": ORIGIN}).status_code == 200
+    for method in (client.post, client.delete):
+        assert method("/api/workspace/pair", headers=LOCAL).status_code == 404
+    page = client.get("/config").text
+    assert 'id="workspace-pair"' not in page and 'workspace-pairing.js' not in page
 
 
 def test_workspace_cors_allowlist_preflight_and_local_boundary(client: TestClient) -> None:
-    auth = pairing(client)
-    preflight = {"Origin": ORIGIN, "Access-Control-Request-Method": "PUT", "Access-Control-Request-Headers": "authorization,content-type"}
+    auth = workspace_headers(client)
+    preflight = {"Origin": ORIGIN, "Access-Control-Request-Method": "PUT", "Access-Control-Request-Headers": "content-type"}
     response = client.options("/api/workspace/config", headers=preflight)
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == ORIGIN
@@ -70,26 +67,21 @@ def test_workspace_cors_allowlist_preflight_and_local_boundary(client: TestClien
     assert client.get("/api/interviews").status_code == 200
 
 
-def test_replacement_expiry_revocation_origin_changes_and_restart(client: TestClient) -> None:
-    old = pairing(client)
-    new = pairing(client)
-    assert client.get("/api/interviews", headers=old).status_code == 401
-    assert client.get("/api/interviews", headers=new).status_code == 200
-    client.app.state.workspace_pairing.expires_at = 0
-    assert client.get("/api/interviews", headers=new).status_code == 401
-    new = pairing(client)
-    assert client.delete("/api/workspace/pair", headers=LOCAL).status_code == 200
-    assert client.get("/api/interviews", headers=new).status_code == 401
-    new = pairing(client)
+def test_clearing_or_changing_origin_revokes_access_immediately(client: TestClient) -> None:
+    auth = workspace_headers(client)
+    assert client.get("/api/interviews", headers=auth).status_code == 200
     client.post("/config", data={"workspace_frontend_origin": ""})
+    response = client.get("/api/interviews", headers=auth)
+    assert response.status_code == 403
+    assert "access-control-allow-origin" not in response.headers
+    client.post("/config", data={"workspace_frontend_origin": "https://changed.example"})
+    assert client.get("/api/interviews", headers=auth).status_code == 403
     client.post("/config", data={"workspace_frontend_origin": ORIGIN})
-    assert client.get("/api/interviews", headers=new).status_code == 401
-    assert not WorkspacePairing().accepts(ORIGIN, new["Authorization"])
-    assert new["Authorization"][7:] not in client.get("/api/workspace/config").text
+    assert client.get("/api/interviews", headers=auth).status_code == 200
 
 
 def test_non_secret_config_validation_and_local_origin_controls(client: TestClient) -> None:
-    auth = pairing(client)
+    auth = workspace_headers(client)
     value = client.get("/api/workspace/config", headers=auth).json()
     assert "test_sarvam" not in str(value) and "test_cb" not in str(value)
     value["llm"]["temperature"] = 0.3
@@ -104,8 +96,8 @@ def test_non_secret_config_validation_and_local_origin_controls(client: TestClie
     assert client.get("/api/workspace/config", headers=auth).json()["ops"]["workspace_frontend_origin"] == ORIGIN
 
 
-def test_paired_interview_builder_report_history_and_general_signaling(client: TestClient) -> None:
-    auth = pairing(client)
+def test_hosted_interview_builder_report_history_and_general_signaling(client: TestClient) -> None:
+    auth = workspace_headers(client)
     identity, _ = activate(client)
     assert client.get("/api/interviews", headers=auth).json()["sessions"][0]["id"] == identity
     response = client.get(f"/api/interviews/sessions/{identity}/report", headers=auth)
@@ -127,7 +119,7 @@ def test_paired_interview_builder_report_history_and_general_signaling(client: T
 
 
 def test_saved_history_reuses_existing_timing_calculations(client: TestClient) -> None:
-    auth = pairing(client)
+    auth = workspace_headers(client)
     identity = f"browser_{'c' * 32}"
     log = {"call_sid": identity, "created_at": "Synthetic test", "metrics": {"turn_count": 1,
         "turn_records": [{"turn_id": 1, "primary_latency_ms": 600, "latest_user_stop_to_first_audio_ms": 400}]},

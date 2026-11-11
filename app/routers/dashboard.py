@@ -72,10 +72,7 @@ async def post_config(request: Request) -> HTMLResponse:
     status, error, saved = 200, None, False
     try:
         updated = _parse_config_form(await request.form(), base)
-        origin_changed = updated.ops.workspace_frontend_origin != base.ops.workspace_frontend_origin
         base = await save_runtime_config(updated)
-        if origin_changed:
-            request.app.state.workspace_pairing.revoke()
         saved = True
     except ValidationError as exc:
         status = 422

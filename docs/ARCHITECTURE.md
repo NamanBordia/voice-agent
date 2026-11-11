@@ -17,7 +17,7 @@ without replacing the active conversation panel.
 | `services/runtime_config.py`, `config_store.py` | Validated config cache, serialized saves, immutable snapshots. |
 | `storage.py` | Atomic local JSON config/history files. |
 | `services/candidate_cors.py` | Exact-origin, opt-in CORS for candidate APIs on the loopback backend. |
-| `services/workspace_access.py`, `routers/workspace.py` | Optional temporary recruiter pairing, scoped workspace CORS and non-secret config/history APIs. |
+| `services/workspace_access.py`, `routers/workspace.py` | Opt-in exact-origin workspace CORS and non-secret config/history APIs. |
 | `routers/dashboard.py` | Settings and saved transcript/metrics views. |
 
 ## Audio and event flow
@@ -82,8 +82,8 @@ A runner that never stops blocks replacement sessions and may require a process 
 
 - One process/worker and one conversation. No multi-user, background worker, media relay, or public backend hosting.
 - An optional full static Vercel frontend calls the same-device loopback backend.
-  Hosted recruiter access requires its own exact configured origin and temporary
-  pairing; candidates retain separate scoped authorization. Chrome network permission
+  Hosted recruiter access requires its own exact configured origin; candidates retain
+  separate scoped authorization. Chrome network permission
   is required. See [Vercel workspace setup](VERCEL_WORKSPACE.md).
 - Browser/device codec rates can differ; SmallWebRTC converts at the fixed 16 kHz pipeline boundary.
 - API keys stay server-side. Behavior is in local JSON and snapshotted per conversation.

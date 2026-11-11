@@ -1,4 +1,3 @@
-import { PUBLIC_API_BASE_URL } from './candidate-config.js';
 import { workspaceClient } from './workspace-api.js';
 import { setupConfig, showCalls, showCall } from './workspace-pages.js';
 
@@ -6,14 +5,15 @@ const element = (id) => document.getElementById(id);
 const message = (text) => { element('workspace-connection-status').textContent = text; };
 let loaded = false;
 let connecting = false;
-const client = workspaceClient({ onUnauthorized() {
+const client = workspaceClient({ onAccessDenied() {
   element('workspace-content').hidden = true;
-  element('workspace-code').value = '';
-  message('Pairing expired or revoked. Create a new code in local Configuration, then reconnect.');
+  message('Hosted access is disabled. Save this site’s exact origin in local Configuration, then reconnect.');
+}, onConnectionLost(error) {
+  // Retain the current page's Stop/Retry controls when a live voice call loses HTTP access.
+  message(error.message);
 } });
 globalThis.workspaceRequest = client.request;
 element('workspace-origin').textContent = location.origin;
-try { element('workspace-code').value = sessionStorage.getItem(`workspace-pairing-${PUBLIC_API_BASE_URL}`) || ''; } catch { /* Manual pairing still works. */ }
 for (const link of document.querySelectorAll('.topnav a')) {
   if (link.pathname === location.pathname || (location.pathname === '/' && link.pathname === '/interviews')
       || (location.pathname.startsWith('/calls/') && link.pathname === '/calls')) link.setAttribute('aria-current', 'page');
@@ -35,7 +35,6 @@ async function connect() {
   if (connecting) return;
   connecting = true;
   element('workspace-connect').disabled = true;
-  client.setToken(element('workspace-code').value);
   message('Connecting to FastAPI on this laptop…');
   try {
     await client.request('/api/workspace/config');
@@ -53,4 +52,4 @@ element('workspace-disconnect').addEventListener('click', () => {
 });
 // A successful first connection already requested Chrome's network permission.
 // Keep navigation/refresh convenient without persisting anything beyond this tab.
-if (element('workspace-code').value) void connect();
+if (client.connected()) void connect();

@@ -8,7 +8,7 @@ No Exotel account, phone call, public tunnel, React server, or MongoDB is needed
 
 For the full static frontend on Vercel with FastAPI still on the same laptop, see
 [Vercel workspace setup](docs/VERCEL_WORKSPACE.md). The separate `build:static`
-outputs public workspace/candidate assets to `frontend/dist/`; paired API access
+outputs public workspace/candidate assets to `frontend/dist/`; exact-origin API access
 keeps keys, interview processing and saved records on the laptop.
 
 ## Run locally

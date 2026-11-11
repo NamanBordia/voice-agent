@@ -1,7 +1,9 @@
 # Full hosted frontend with a loopback backend — proposed scope
 
-Status: approved by the user on 2026-11-11 and implemented. Current setup and
-behavior are documented in [VERCEL_WORKSPACE.md](VERCEL_WORKSPACE.md).
+Status: original scope approved on 2026-11-11; subsequently amended at the user's
+explicit request to remove recruiter pairing codes. The pairing sections below record
+the original design and no longer describe current behavior. Current code uses exact
+origin plus loopback access. Setup is in [VERCEL_WORKSPACE.md](VERCEL_WORKSPACE.md).
 
 ## Why the deployed root opens the candidate page
 

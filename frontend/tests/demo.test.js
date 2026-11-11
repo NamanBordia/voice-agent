@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { connectionFailureText } from '../connection-errors.js';
 
 let moduleId = 0;
 
@@ -55,6 +56,12 @@ test('microphone meter accepts only finite levels in its zero-to-one range', asy
 async function page({ denied = false, participation = undefined, workspace = undefined, connectFailure = false } = {}) {
   globalThis.interviewParticipation = participation;
   globalThis.workspaceVoice = workspace;
+  globalThis.connectionFailureText = connectionFailureText;
+  const startup = [];
+  globalThis.Daily = { getCallInstance: () => null, createCallObject: (options) => {
+    startup.push({ step: 'create', options });
+    return { load: async (options) => { startup.push({ step: 'load', options }); } };
+  } };
   const ids = ['conversation', 'start', 'mute', 'end', 'bot-audio', 'mic-level', 'transcript', 'status', 'error', 'empty', 'audio-enable', 'history', 'history-link', 'retry-save', 'input-device'];
   const elements = Object.fromEntries(ids.map((id) => [id, new Element()]));
   globalThis.document = { getElementById: (id) => elements[id], createElement: () => new Element() };
@@ -62,8 +69,8 @@ async function page({ denied = false, participation = undefined, workspace = und
   globalThis.MediaStream = class {};
   let current;
   globalThis.PipecatClient = class {
-    constructor(options) { current = this; this.callbacks = options.callbacks; this.micChanges = []; this.sent = []; }
-    async initDevices() { if (denied) throw new Error('Microphone permission denied'); }
+    constructor(options) { startup.push({ step: 'client' }); current = this; this.callbacks = options.callbacks; this.micChanges = []; this.sent = []; }
+    async initDevices() { startup.push({ step: 'microphone' }); if (denied) throw new Error('Microphone permission denied'); }
     enableMic(enabled) { this.micChanges.push(enabled); }
     async connect(params) {
       this.connectParams = params;
@@ -79,13 +86,13 @@ async function page({ denied = false, participation = undefined, workspace = und
   const source = (await readFile(new URL('../demo.js', import.meta.url), 'utf8'))
     .replace(/^import .*;\r?\n/gm, '');
   await import(`data:text/javascript;base64,${Buffer.from(`${source}\n// case ${moduleId++}`).toString('base64')}`);
-  return { elements, client: () => current };
+  return { elements, client: () => current, startup };
 }
 
-test('hosted Talk keeps its normal mic gating and saves through the paired workspace API', async () => {
-  const calls = []; const endpoint = new Request('http://127.0.0.1:8000/api/offer', { headers: { Authorization: 'Bearer paired' } });
+test('hosted Talk keeps normal mic gating and saves without recruiter authorization headers', async () => {
+  const calls = []; const endpoint = new Request('http://127.0.0.1:8000/api/offer', { method: 'POST' });
   const { elements, client } = await page({ workspace: {
-    offerRequest: { endpoint }, headers: { Authorization: 'Bearer paired' },
+    offerRequest: { endpoint }, headers: { 'Content-Type': 'application/json' },
     endEndpoint: (sid) => `http://127.0.0.1:8000/api/sessions/${sid}/end`,
     fetch: async (url, options) => { calls.push({ url, options }); return Response.json({ saved: true, history_url: `/calls/browser_${'a'.repeat(32)}` }); },
   } });
@@ -95,8 +102,16 @@ test('hosted Talk keeps its normal mic gating and saves through the paired works
   client().callbacks.onBotStoppedSpeaking(); assert.equal(client().micChanges.at(-1), true);
   elements.end.handlers.click(); await settle();
   assert.match(calls[0].url, /http:\/\/127\.0\.0\.1:8000\/api\/sessions\/browser_[a-f0-9]{32}\/end/);
-  assert.equal(calls[0].options.headers.Authorization, 'Bearer paired');
+  assert.equal(calls[0].options.headers.Authorization, undefined);
   assert.match(elements['history-link'].href, /^\/calls\/browser_/);
+});
+
+test('Talk loads the existing Daily helper with avoidEval before constructing the transport', async () => {
+  const { elements, startup } = await page();
+  await elements.start.handlers.click();
+  assert.deepEqual(startup.map((event) => event.step), ['create', 'load', 'client', 'microphone']);
+  assert.equal(startup[0].options.dailyConfig.avoidEval, true);
+  assert.equal(startup[1].options.dailyConfig.avoidEval, true);
 });
 
 test('candidate connection failure cleans up the scoped runner before receiving a call SID', async () => {
@@ -223,7 +238,7 @@ test('denied microphone resets controls and displays a useful error', async () =
   await elements.start.handlers.click();
   assert.equal(elements.start.disabled, false);
   assert.equal(client().disconnected, true);
-  assert.match(elements.error.textContent, /Microphone permission denied/);
+  assert.match(elements.error.textContent, /Microphone access was denied/);
 });
 
 test('overlapping playback callbacks send readiness only once', async () => {

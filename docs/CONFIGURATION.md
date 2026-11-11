@@ -14,7 +14,7 @@ Only provider credentials and server settings live in `.env`. Behavior is stored
 | Greeting | Directly spoken `Hello, how can I help you today?`; no extra LLM generation. |
 | Readiness / shutdown wait | 30 seconds / 30 seconds. Cleanup continues after an HTTP wait expires. |
 | Hosted candidate origin | `ops.candidate_frontend_origin` defaults blank (disabled). One exact HTTPS production origin can be saved in local Configuration. |
-| Hosted workspace origin | `ops.workspace_frontend_origin` defaults blank. Save locally to enable temporary paired recruiter access from one exact HTTPS origin. |
+| Hosted workspace origin | `ops.workspace_frontend_origin` defaults blank. Save locally to enable recruiter access without a pairing code from one exact HTTPS origin. |
 | Memory | Existing recent-window, facts, local summary, and lexical recall settings. |
 
 The models in `app/models/runtime_config_models.py` define all ranges and supported values.
@@ -48,7 +48,7 @@ A canceled HTTP request does not interrupt that write/cache transaction.
 Active conversations keep their existing snapshot. UI saves affect the next conversation.
 The hosted origin fields are access policies: live loaded values take effect
 immediately after saving, including revocation. They are not read from a call snapshot.
-Candidate and paired workspace access are separate. Hosted settings cannot edit these
+Candidate and workspace origin access are separate. Hosted settings cannot edit these
 local approvals. See [Vercel workspace setup](VERCEL_WORKSPACE.md).
 Manual edits to the JSON file are read on restart. Model, voice, prompt, greeting,
 and timeout values are not read from old behavior environment variables.

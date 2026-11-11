@@ -1,4 +1,4 @@
-// Private content arrives only from the paired local API. Use text nodes for all data.
+// Private content arrives only from the approved local API. Use text nodes for all data.
 const node = (tag, text = '', className = '') => {
   const element = document.createElement(tag); element.textContent = text; element.className = className; return element;
 };
@@ -23,7 +23,7 @@ export async function setupConfig(request, root) {
     }
   }
   populate();
-  const status = node('p', 'Origin approvals and pairing controls are managed only in local Configuration.', 'hint');
+  const status = node('p', 'Origin approvals are managed only in local Configuration.', 'hint');
   status.setAttribute('role', 'status'); form.append(status);
   form.addEventListener('submit', async (event) => {
     event.preventDefault();

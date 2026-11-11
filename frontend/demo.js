@@ -1,5 +1,7 @@
 import { PipecatClient } from '@pipecat-ai/client-js';
 import { SmallWebRTCTransport } from '@pipecat-ai/small-webrtc-transport';
+import Daily from '@daily-co/daily-js';
+import { connectionFailureText } from './connection-errors.js';
 
 const element = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
 const startButton = /** @type {HTMLButtonElement} */ (element('start'));
@@ -176,10 +178,19 @@ startButton.addEventListener('click', async () => {
   muteButton.setAttribute('aria-pressed', 'false');
   status('Allow microphone access to connect…', 'connecting');
   let active;
+  let connectionPhase = 'audio helper';
   try {
     if (participation?.beforeStart && !await participation.beforeStart()) {
       resetControls(); return;
     }
+    if (!participation) {
+      status('Loading the audio device helper…', 'connecting');
+      // Match the candidate path: load before the transport's startCamera config
+      // can replace avoidEval. Hosted CSP intentionally disallows unsafe-eval.
+      const mediaCall = Daily.getCallInstance() || Daily.createCallObject({ dailyConfig: { avoidEval: true } });
+      await mediaCall.load({ dailyConfig: { avoidEval: true } });
+    }
+    connectionPhase = 'microphone';
     active = new PipecatClient({
       transport: participation?.createTransport?.() || new SmallWebRTCTransport({ iceServers: [] }),
       enableMic: true,
@@ -244,16 +255,18 @@ startButton.addEventListener('click', async () => {
           }
         },
         onBotLlmStarted: () => { if (valid()) status('Thinking…', 'preparing'); },
-        onError: (event) => {
+        onError: async (event) => {
           if (!valid()) return;
-          error(event.data?.error || event.error || event.message || 'The agent reported a provider error.');
+          const text = await connectionFailureText(event, connectionPhase);
+          if (!valid()) return;
+          error(text);
           void stop();
         },
         onDisconnected: () => { if (valid() && !stopping) void stop(); },
       },
     });
   } catch (cause) {
-    error(cause.message || 'This browser could not initialize audio.');
+    error(await connectionFailureText(cause, connectionPhase));
     resetControls();
     status('Could not initialize audio.', 'error');
     await participation?.onEnd?.();
@@ -268,10 +281,11 @@ startButton.addEventListener('click', async () => {
     if (!valid()) return;
     endButton.disabled = false; // Allows canceling a connection before a session ID arrives.
     status('Connecting…', 'connecting');
+    connectionPhase = 'signaling';
     await active.connect({ webrtcRequestParams: participation?.offerRequest || workspace?.offerRequest || { endpoint: participation?.offerEndpoint || '/api/offer', headers: participation?.headers } });
   } catch (cause) {
     if (!valid()) return;
-    error(cause.message || 'Connection failed. Check microphone permissions and Settings.');
+    error(await connectionFailureText(cause, connectionPhase));
     await stop();
   }
 });
