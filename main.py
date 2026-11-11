@@ -21,6 +21,7 @@ from app.interviews.service import InterviewService
 from app.services.browser_session import BrowserSessionManager
 from app.services.runtime_config import close_runtime_config, seed_runtime_config_if_missing
 from app.services.warmup import run_local_warmup
+from app.services.candidate_cors import CandidateCORSMiddleware, approved_candidate_origin
 
 STATIC_DIR = Path(__file__).resolve().parent / "app" / "static"
 
@@ -48,12 +49,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    """Create the single-user, same-origin FastAPI application."""
+    """Create the local application with opt-in hosted candidate access."""
     app = FastAPI(title="Browser Voice Agent", version="0.2.0", lifespan=lifespan)
 
     @app.middleware("http")
     async def same_origin(request: Request, call_next: RequestResponseEndpoint) -> Response:
-        """Reject browser mutations from another origin without introducing CORS."""
+        """Keep management local and permit only scoped, approved candidate origins."""
         candidate_path = request.url.path.startswith(("/candidate/", "/api/candidate/", "/static/"))
         if not candidate_path:
             try:
@@ -70,10 +71,11 @@ def create_app() -> FastAPI:
             if length < 0 or length > 110000:
                 return JSONResponse({"detail": "Request too large"}, status_code=413)
         origin = request.headers.get("origin")
-        if request.method in {"POST", "PATCH", "PUT", "DELETE"} and origin:
+        if origin and (request.method in {"POST", "PATCH", "PUT", "DELETE"} or not candidate_path):
             parsed = urlsplit(origin)
             if parsed.scheme != request.url.scheme or parsed.netloc != request.headers.get("host"):
-                return JSONResponse({"detail": "Use the application's own browser page"}, status_code=403)
+                if not (request.url.path.startswith("/api/candidate/") and approved_candidate_origin(request.scope, origin)):
+                    return JSONResponse({"detail": "Use the application's own browser page"}, status_code=403)
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -90,6 +92,7 @@ def create_app() -> FastAPI:
             )
         return response
 
+    app.add_middleware(CandidateCORSMiddleware)
     app.include_router(browser_router)
     app.include_router(dashboard_router)
     app.include_router(interview_router)

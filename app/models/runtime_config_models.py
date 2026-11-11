@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
@@ -107,6 +108,25 @@ class OpsCfg(RuntimeModel):
     debug_log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     browser_ready_timeout_secs: float = Field(default=30.0, ge=5, le=120)
     shutdown_timeout_secs: float = Field(default=30.0, ge=1, le=60)
+    candidate_frontend_origin: str = Field(default="", max_length=300)
+
+    @field_validator("candidate_frontend_origin")
+    @classmethod
+    def validate_candidate_frontend_origin(cls, value: str) -> str:
+        """Allow one explicit HTTPS frontend origin; blank disables hosted access."""
+        if not value:
+            return value
+        parsed = urlsplit(value)
+        try:
+            port = parsed.port
+        except ValueError as exc:
+            raise ValueError("Candidate frontend origin has an invalid port") from exc
+        if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
+                or parsed.path or parsed.query or parsed.fragment or "*" in value
+                or any(char.isspace() for char in value) or "\\" in value
+                or value != f"https://{parsed.netloc}" or (port is not None and port < 1)):
+            raise ValueError("Use the exact HTTPS production origin, with no path or trailing slash; blank disables hosted access")
+        return value
 
 
 class RuntimeConfig(RuntimeModel):

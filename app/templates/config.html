@@ -103,6 +103,8 @@
       <label for="config-browser_ready_timeout_secs">Browser readiness timeout (seconds)</label><input id="config-browser_ready_timeout_secs" name="browser_ready_timeout_secs" value="{{ config.ops.browser_ready_timeout_secs }}" />
       <label for="config-shutdown_timeout_secs">Shutdown timeout (seconds)</label><input id="config-shutdown_timeout_secs" name="shutdown_timeout_secs" value="{{ config.ops.shutdown_timeout_secs }}" />
       <p class="hint">How long End waits before offering Retry saving. Cleanup continues until the pipeline has finished.</p>
+      <label for="config-candidate_frontend_origin">Hosted candidate origin (optional)</label><input id="config-candidate_frontend_origin" name="candidate_frontend_origin" value="{{ config.ops.candidate_frontend_origin }}" placeholder="https://your-project.vercel.app" />
+      <p class="hint">Paste the exact production HTTPS origin Vercel assigns, without a trailing slash. Blank disables cross-origin access. Only candidate APIs accept it; recruiter pages stay local. Takes effect after saving.</p>
       <p class="hint">Set <code>DEBUG</code> to inspect transcription and turn diagnostics.</p>
     </fieldset>
 

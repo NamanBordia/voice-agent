@@ -8,6 +8,7 @@
   "scripts": {
     "prepare:vision": "node prepare-vision.mjs",
     "build": "node build.mjs",
+    "build:static": "node build-static.mjs",
     "test": "node --test tests/*.test.js"
   },
   "dependencies": {

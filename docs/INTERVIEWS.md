@@ -1,5 +1,9 @@
 # Single-interview workflow
 
+Optional static candidate hosting is documented in [Vercel candidate setup](VERCEL_CANDIDATE.md).
+It retains this local workflow and the existing authorized APIs; only the candidate UI
+is hosted, with explicit CORS to FastAPI on the same laptop.
+
 The existing general demo remains at `/`. Interview mode shares its browser audio
 client, Sarvam STT/TTS, Cerebras provider, fixed 16 kHz transport, memory processors,
 no-barge-in gates, readiness handshake, observers, and once-only call finalizer.

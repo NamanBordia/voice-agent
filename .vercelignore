@@ -1,0 +1,14 @@
+.env
+.env.*
+.venv/
+venv/
+data/
+logs/
+scratch/
+.git/
+.pytest_cache/
+**/__pycache__/
+frontend/node_modules/
+frontend/dist/
+app/static/*.js
+app/static/vision/

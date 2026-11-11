@@ -3,14 +3,11 @@ import Daily from '@daily-co/daily-js';
 import { createCandidateHeaders } from './candidate-http.js';
 import { SmallWebRTCTransport } from '@pipecat-ai/small-webrtc-transport';
 import { candidateTransport } from './candidate-transport.js';
-const CandidateTransport = candidateTransport(SmallWebRTCTransport);
+import { candidateLocation, candidateOfferRequest, fetchCandidate, BACKEND_HELP } from './candidate-config.js';
 const el = (id) => document.getElementById(id);
-const id = el('candidate-root').dataset.sessionId;
-const token = new URLSearchParams(location.hash.slice(1)).get('token') || sessionStorage.getItem(`interview-token-${id}`) || '';
-if (token) sessionStorage.setItem(`interview-token-${id}`, token);
-history.replaceState(null, '', location.pathname); // Keep bearer tokens out of referrers and visible URL after entry.
+const { sessionId: id, token, base, apiBase } = candidateLocation(el('candidate-root'), location, sessionStorage, history);
+const CandidateTransport = candidateTransport(SmallWebRTCTransport, apiBase ? BACKEND_HELP : '');
 const { signalingHeaders, jsonHeaders: headers } = createCandidateHeaders(token);
-const base = `/api/candidate/${id}`;
 let info; let camera = null; let monitor = null; let checkStream = null; let audioContext = null; let meterTimer = null;
 let prepared = false; let micChecked = false; let running = false; let sequence = 0; let heartbeatSequence = 0; let sendQueue = Promise.resolve();
 let queuedUpdates = 0;
@@ -18,7 +15,7 @@ let cameraCallSid = null; let deliveryGeneration = 0; let exiting = false;
 let cameraGeneration = 0;
 const message = (text) => { el('preparation-status').textContent = text; };
 async function request(path = '', method = 'GET', body, keepalive = false) {
-  const response = await fetch(`${base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), keepalive, signal: keepalive ? undefined : AbortSignal.timeout(10000) });
+  const response = await fetchCandidate(`${base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), keepalive, signal: keepalive ? undefined : AbortSignal.timeout(10000) }, apiBase);
   const result = await response.json();
   if (!response.ok) throw new Error(typeof result.detail === 'string' ? result.detail : 'Interview request failed.');
   return result;
@@ -146,6 +143,8 @@ globalThis.interviewParticipation = {
   sessionId: id,
   createTransport: () => new CandidateTransport({ iceServers: [] }),
   headers: signalingHeaders, offerEndpoint: `${base}/offer`, endEndpoint: `${base}/end`,
+  offerRequest: candidateOfferRequest(`${base}/offer`, headers, apiBase),
+  fetch: (input, init) => fetchCandidate(input, init, apiBase),
   beforeStart: async () => {
     if (!prepared || running) { message('Complete device preparation first.'); return false; }
     deliveryGeneration += 1; exiting = false;
@@ -195,8 +194,22 @@ el('abandon').addEventListener('click', async () => {
     await request('/abandon', 'POST'); running = false; prepared = false; stopCheck(); stopCamera(false); await refresh();
   } catch (error) { message(error.message); }
 });
-try {
-  await refresh();
-  if (!['completed', 'failed', 'abandoned', 'in_progress'].includes(info.status)) await request('/prepare', 'POST', { phase: 'device_check', camera_consent: false });
-  await import('./demo.js');
-} catch (error) { message(`Cannot load this interview: ${error.message}`); }
+let clientLoaded = false;
+async function loadInterview() {
+  try {
+    if (!id) throw new Error('Incomplete interview link. Open the full /candidate/<session-id>#token=<token> link supplied by the recruiter.');
+    await refresh();
+    if (!['completed', 'failed', 'abandoned', 'in_progress'].includes(info.status)) await request('/prepare', 'POST', { phase: 'device_check', camera_consent: false });
+    if (!clientLoaded) { await import('./demo.js'); clientLoaded = true; }
+    el('local-backend-connect').hidden = true;
+  } catch (error) { message(`Cannot load this interview: ${error.message}`); }
+}
+if (apiBase) {
+  el('local-backend-connect').hidden = false;
+  el('ready-interview').disabled = true;
+  message('Start FastAPI on this same laptop, then connect below. Allow Chrome’s local network / apps-on-device permission when prompted.');
+  el('connect-backend').addEventListener('click', async () => {
+    el('connect-backend').disabled = true;
+    try { await loadInterview(); } finally { el('connect-backend').disabled = false; }
+  });
+} else await loadInterview();

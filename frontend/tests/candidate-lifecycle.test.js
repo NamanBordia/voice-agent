@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createCandidateHeaders } from '../candidate-http.js';
+import { candidateLocation, candidateOfferRequest, fetchCandidate, BACKEND_HELP } from '../candidate-config.js';
 
 let moduleId = 0;
 class Element {
@@ -15,7 +16,7 @@ function stream(kind) {
   const track = { kind, readyState: 'live', stop() { this.readyState = 'ended'; } };
   return { track, getTracks: () => [track], getVideoTracks: () => kind === 'video' ? [track] : [] };
 }
-async function page({ consent = true, acquire = async () => stream('video'), eventDelivery = true } = {}) {
+async function page({ consent = true, acquire = async () => stream('video'), eventDelivery = true, hosted = false, unreachable = false } = {}) {
   const elements = {}; const el = (id) => elements[id] ||= new Element();
   el('camera-consent').checked = consent; el('speaker-confirmed').checked = true;
   globalThis.document = { getElementById: el };
@@ -39,8 +40,9 @@ async function page({ consent = true, acquire = async () => stream('video'), eve
     camera: { phone_enabled: true }, camera_sequence: 0, heartbeat_sequence: 0, title: 'Intern', language: 'en',
     duration_minutes: 5, remaining_secs: 300 };
   globalThis.fetch = async (path, options) => {
+    if (unreachable) throw new TypeError('Failed to fetch');
     const body = options.body ? JSON.parse(options.body) : undefined;
-    requests.push({ path, method: options.method, body });
+    requests.push({ path, method: options.method, body, options });
     if (path.endsWith('/prepare')) {
       if (server.status !== 'paused') server.status = body.phase;
       return Response.json({ status: server.status });
@@ -51,6 +53,7 @@ async function page({ consent = true, acquire = async () => stream('video'), eve
   };
   globalThis.candidateDeps = {
     createCandidateHeaders, SmallWebRTCTransport: class {}, candidateTransport: (Base) => Base,
+    candidateLocation: (...args) => candidateLocation(...args, hosted ? 'http://127.0.0.1:8000' : ''), candidateOfferRequest, fetchCandidate, BACKEND_HELP,
     Daily: { getCallInstance: () => ({ async load() {} }) },
     CameraMonitor: class {
       constructor(options) { this.options = options; monitors.push(this); }
@@ -61,10 +64,13 @@ async function page({ consent = true, acquire = async () => stream('video'), eve
   const source = (await readFile(new URL('../candidate.js', import.meta.url), 'utf8'))
     .replace(/^import .*;\r?\n/gm, '')
     .replace("await import('./demo.js');", 'void 0;');
-  const prefix = 'const { CameraMonitor, Daily, createCandidateHeaders, SmallWebRTCTransport, candidateTransport } = globalThis.candidateDeps;\n';
+  const prefix = 'const { CameraMonitor, Daily, createCandidateHeaders, SmallWebRTCTransport, candidateTransport, candidateLocation, candidateOfferRequest, fetchCandidate, BACKEND_HELP } = globalThis.candidateDeps;\n';
   await import(`data:text/javascript;base64,${Buffer.from(`${prefix}${source}\n// case ${moduleId++}`).toString('base64')}`);
-  await el('check-mic').handlers.click();
-  await el('ready-interview').handlers.click();
+  if (hosted) {
+    assert.equal(requests.length, 0); // No permission-triggering request before an explicit click.
+    await el('connect-backend').handlers.click();
+  }
+  if (!unreachable) { await el('check-mic').handlers.click(); await el('ready-interview').handlers.click(); }
   const participation = globalThis.interviewParticipation;
   const announce = async (callSid) => {
     server.status = 'in_progress'; server.call_sid = callSid;
@@ -98,6 +104,31 @@ test('resume reacquires a fresh camera before monitoring the new call without an
   assert.equal(p.monitors[1].options.callSid, 'call2');
   assert.equal(p.monitors[0].stopped, true);
   await p.pause();
+});
+
+test('hosted candidate uses loopback for preparation, monitoring, consent and end endpoints', async () => {
+  const p = await page({ hosted: true });
+  assert.equal(p.participation.offerRequest.endpoint.url, 'http://127.0.0.1:8000/api/candidate/candidate-session/offer');
+  assert.equal(p.participation.endEndpoint, 'http://127.0.0.1:8000/api/candidate/candidate-session/end');
+  await p.participation.beforeStart(); await p.announce('hosted-call');
+  await p.monitors[0].options.send({ type: 'phone_detected', start_secs: 0, duration_secs: 2, confidence: .8 });
+  await p.monitors[0].options.heartbeat('active'); await p.pause();
+  p.elements['camera-consent'].checked = false; await p.elements['camera-consent'].handlers.change();
+  for (const request of p.requests) {
+    assert.ok(request.path.startsWith('http://127.0.0.1:8000/api/candidate/'));
+    assert.equal(request.options.targetAddressSpace, 'loopback');
+    assert.equal(request.options.credentials, 'omit');
+    assert.equal(request.options.headers.get('Authorization'), 'Bearer test-token');
+    assert.ok(!request.path.includes('test-token'));
+  }
+});
+
+test('hosted network failures explain same-device FastAPI and Chrome permission without losing retry', async () => {
+  const p = await page({ hosted: true, unreachable: true });
+  assert.match(p.elements['preparation-status'].textContent, /Start FastAPI.*same laptop.*Chrome/);
+  assert.equal(p.elements['local-backend-connect'].hidden, false);
+  assert.equal(p.elements['connect-backend'].disabled, false);
+  assert.equal(p.elements['ready-interview'].disabled, true);
 });
 
 test('candidate event queue returns a verified receipt and preserves identity across failed retries', async () => {

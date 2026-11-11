@@ -5,10 +5,39 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { createCandidateHeaders } from '../candidate-http.js';
 import { candidateTransport } from '../candidate-transport.js';
+import { candidateOfferRequest } from '../candidate-config.js';
 
 // The SDK's ESM entry contains an extensionless lodash import; its CJS entry
 // exposes the same transport methods and can be loaded directly by Node.
 const { SmallWebRTCTransport } = createRequire(import.meta.url)('@pipecat-ai/small-webrtc-transport');
+
+test('hosted SDK offers and subsequent ICE use the same absolute loopback Request and bearer header', async (t) => {
+  const { jsonHeaders } = createCandidateHeaders('scoped-test-token');
+  const endpoint = 'http://127.0.0.1:8000/api/candidate/session/offer';
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async (input, init) => {
+    const request = new Request(input, init);
+    requests.push({ url: request.url, method: request.method, headers: request.headers, credentials: request.credentials, referrerPolicy: request.referrerPolicy, body: await request.json() });
+    return Response.json({ pc_id: 'peer', type: 'answer', sdp: 'test-answer' });
+  });
+  const Transport = candidateTransport(SmallWebRTCTransport); const transport = Object.create(Transport.prototype);
+  transport._webrtcRequest = candidateOfferRequest(endpoint, jsonHeaders, 'http://127.0.0.1:8000');
+  assert.equal(transport._webrtcRequest.endpoint.referrerPolicy, 'no-referrer');
+  transport.pc_id = null;
+  transport.pc = { async createOffer() { return { sdp: 'test-offer', type: 'offer' }; }, async setLocalDescription(value) { this.localDescription = value; }, async setRemoteDescription() {} };
+  await transport.negotiate();
+  transport._candidateQueue = [{ candidate: 'candidate:test', sdpMid: '0', sdpMLineIndex: 0 }]; transport._canSendIceCandidates = true;
+  await transport.flushIceCandidates();
+  assert.deepEqual(requests.map((request) => request.method), ['POST', 'PATCH']);
+  for (const request of requests) {
+    assert.equal(request.url, endpoint); assert.equal(request.credentials, 'omit');
+    // Node's bundled undici resets this property on Request cloning. The hosted
+    // document also enforces no-referrer through both meta and response headers.
+    assert.ok(['', 'no-referrer'].includes(request.referrerPolicy));
+    assert.equal(request.headers.get('Authorization'), 'Bearer scoped-test-token'); assert.equal(request.headers.get('Content-Type'), 'application/json');
+  }
+  assert.equal(requests[1].body.pc_id, 'peer');
+});
 
 test('candidate SDK POST and PATCH retain bearer auth and one JSON Content-Type', async () => {
   const { signalingHeaders, jsonHeaders } = createCandidateHeaders('test-participation-token');

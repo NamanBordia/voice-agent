@@ -54,7 +54,7 @@ def _parse_config_form(form: Any, base: RuntimeConfig) -> RuntimeConfig:
                    "summary_update_every_turns": "mem_summary_update_every_turns",
                    "recall_min_overlap": "mem_recall_min_overlap", "max_memory_block_tokens": "mem_max_memory_block_tokens"},
         "ops": {"debug_log_level": "debug_log_level", "browser_ready_timeout_secs": "browser_ready_timeout_secs",
-                "shutdown_timeout_secs": "shutdown_timeout_secs"},
+                "shutdown_timeout_secs": "shutdown_timeout_secs", "candidate_frontend_origin": "candidate_frontend_origin"},
     }
     for group, mapping in fields.items():
         for key, field in mapping.items():

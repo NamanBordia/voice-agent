@@ -111,7 +111,7 @@ function resetControls() {
 
 async function saveConversation(sid) {
   pendingSaveSid = sid;
-  const response = await fetch(endEndpoint(sid), {
+  const response = await (participation?.fetch || fetch)(endEndpoint(sid), {
     method: 'POST', headers: participation?.headers, signal: AbortSignal.timeout(65000),
   });
   const result = await response.json();
@@ -265,7 +265,7 @@ startButton.addEventListener('click', async () => {
     if (!valid()) return;
     endButton.disabled = false; // Allows canceling a connection before a session ID arrives.
     status('Connecting…', 'connecting');
-    await active.connect({ webrtcRequestParams: { endpoint: participation?.offerEndpoint || '/api/offer', headers: participation?.headers } });
+    await active.connect({ webrtcRequestParams: participation?.offerRequest || { endpoint: participation?.offerEndpoint || '/api/offer', headers: participation?.headers } });
   } catch (cause) {
     if (!valid()) return;
     error(cause.message || 'Connection failed. Check microphone permissions and Settings.');
@@ -304,6 +304,6 @@ window.addEventListener('pagehide', () => {
   client?.enableMic(false);
   participation?.onPageHide?.();
   const cleanupSid = callSid || (client && participation?.sessionId);
-  if (cleanupSid) void fetch(endEndpoint(cleanupSid), { method: 'POST', headers: participation?.headers, keepalive: true }).catch(() => {});
+  if (cleanupSid) void (participation?.fetch || fetch)(endEndpoint(cleanupSid), { method: 'POST', headers: participation?.headers, keepalive: true }).catch(() => {});
   void client?.disconnect().catch(() => {});
 });

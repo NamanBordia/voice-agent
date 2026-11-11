@@ -6,6 +6,10 @@ Sarvam realtime STT, Cerebras Qwen 3.8 27B with reasoning disabled, and Sarvam B
 
 No Exotel account, phone call, public tunnel, React server, or MongoDB is needed.
 
+For a static candidate page on Vercel with FastAPI still on the same laptop, see
+[Vercel candidate setup](docs/VERCEL_CANDIDATE.md). The separate `build:static`
+outputs only public candidate assets to `frontend/dist/`; recruiter management stays local.
+
 ## Run locally
 
 Use Python 3.11+ and Node 22.14+ for the initial browser build. Node is not needed to run built assets. In PowerShell, use `npm.cmd` if execution policy blocks `npm.ps1`.

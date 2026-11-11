@@ -1,6 +1,6 @@
 // SmallWebRTC 1.10.2 schedules retries even after stop, and flushes ICE after a
 // failed offer. Candidate sessions need an explicit Resume with server cleanup.
-export function candidateTransport(BaseTransport) {
+export function candidateTransport(BaseTransport, networkHelp = '') {
   return class CandidateTransport extends BaseTransport {
     interviewClosed = false;
     interviewFailureReported = false;
@@ -8,7 +8,7 @@ export function candidateTransport(BaseTransport) {
     async attemptReconnection() {
       if (this.interviewClosed || this.interviewFailureReported) return;
       this.interviewFailureReported = true;
-      this._callbacks?.onError?.(new Error('Interview connection failed. Wait for cleanup, then click Resume interview.'));
+      this._callbacks?.onError?.(new Error(`${networkHelp ? `${networkHelp} ` : ''}Interview connection failed. Wait for cleanup, then click Resume interview.`));
     }
 
     async flushIceCandidates() {
