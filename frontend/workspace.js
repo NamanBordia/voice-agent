@@ -2,7 +2,11 @@ import { workspaceClient } from './workspace-api.js';
 import { setupConfig, showCalls, showCall } from './workspace-pages.js';
 
 const element = (id) => document.getElementById(id);
-const message = (text) => { element('workspace-connection-status').textContent = text; };
+const message = (text) => {
+  element('workspace-connection-status').textContent = text;
+  element('workspace-connection-alert').hidden = false;
+  element('workspace-loading').hidden = true;
+};
 let loaded = false;
 let connecting = false;
 const client = workspaceClient({ onAccessDenied() {
@@ -13,14 +17,13 @@ const client = workspaceClient({ onAccessDenied() {
   message(error.message);
 } });
 globalThis.workspaceRequest = client.request;
-element('workspace-origin').textContent = location.origin;
 for (const link of document.querySelectorAll('.topnav a')) {
   if (link.pathname === location.pathname || (location.pathname === '/' && link.pathname === '/interviews')
       || (location.pathname.startsWith('/calls/') && link.pathname === '/calls')) link.setAttribute('aria-current', 'page');
 }
 
 async function loadPage() {
-  if (loaded) { location.reload(); return; }
+  if (loaded) return;
   const page = document.body.dataset.page;
   if (page === 'interviews') await import('./recruiter.js');
   else if (page === 'talk') {
@@ -34,22 +37,19 @@ async function loadPage() {
 async function connect() {
   if (connecting) return;
   connecting = true;
-  element('workspace-connect').disabled = true;
-  message('Connecting to FastAPI on this laptop…');
+  element('workspace-retry').disabled = true;
+  element('workspace-connection-alert').hidden = true;
+  element('workspace-loading').hidden = loaded;
   try {
     await client.request('/api/workspace/config');
     client.retain();
     await loadPage();
     element('workspace-content').hidden = false;
-    message('Connected to your local backend. Provider keys and saved records remain on this laptop.');
-  } catch (error) { element('workspace-content').hidden = true; message(error.message); }
-  finally { connecting = false; element('workspace-connect').disabled = false; }
+    element('workspace-loading').hidden = true;
+  } catch (error) { if (!loaded) element('workspace-content').hidden = true; message(error.message); }
+  finally { connecting = false; element('workspace-retry').disabled = false; }
 }
-element('workspace-connect-form').addEventListener('submit', (event) => { event.preventDefault(); void connect(); });
-element('workspace-disconnect').addEventListener('click', () => {
-  // Reload also releases a Talk connection through its existing page-exit cleanup.
-  client.clear(); location.reload();
-});
-// A successful first connection already requested Chrome's network permission.
-// Keep navigation/refresh convenient without persisting anything beyond this tab.
-if (client.connected()) void connect();
+// The browser still controls local-network permission. Retry provides a user
+// gesture if Chrome requires one, while normal visits connect without a panel.
+element('workspace-retry').addEventListener('click', () => { void connect(); });
+void connect();

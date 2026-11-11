@@ -23,16 +23,12 @@
     <div class="nav-footer">Hosted interface<small>Backend and records on this laptop</small></div>
   </nav>
   <div id="page-content" tabindex="-1">
-    <section class="panel" aria-labelledby="connection-heading">
-      <h2 id="connection-heading">Connect to your local workspace</h2>
-      <p>Start FastAPI on this laptop. At <a href="http://127.0.0.1:8000/config" target="_blank" rel="noreferrer noopener">local Configuration</a>, save this site's origin in both hosted origin fields, then connect below.</p>
-      <p>Your hosted origin: <code id="workspace-origin"></code></p>
-      <form id="workspace-connect-form">
-        <button id="workspace-connect" type="submit">Connect to local backend</button>
-        <button id="workspace-disconnect" type="button" class="secondary">Disconnect this tab</button>
-      </form>
-      <p id="workspace-connection-status" role="status" aria-live="polite">Not connected. Allow Chrome's local network / apps-on-device permission when prompted.</p>
-    </section>
+    <p id="workspace-loading" class="hint" role="status">Loading workspace…</p>
+    <div id="workspace-connection-alert" class="workspace-message" role="status" aria-live="polite" hidden>
+      <span id="workspace-connection-status"></span>
+      <button id="workspace-retry" type="button" class="secondary">Retry connection</button>
+      <a href="http://127.0.0.1:8000/config" target="_blank" rel="noreferrer noopener">Local configuration</a>
+    </div>
     <main id="workspace-content" hidden><!-- WORKSPACE_CONTENT --></main>
   </div>
 </div>

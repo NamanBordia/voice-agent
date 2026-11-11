@@ -25,6 +25,9 @@ test('hosted workspace reuses builder and Talk UI and generates data-free settin
     const html = workspaceHtml(template, shell, 'http://127.0.0.1:8000', page);
     assert.ok(!/{[{%#]/.test(html)); assert.match(html, new RegExp(`data-page="${page}"`));
     assert.match(html, /href="\/talk"/); assert.ok(!html.includes('id="workspace-code"'));
+    assert.ok(!html.includes('Connect to your local workspace'));
+    assert.ok(!html.includes('id="workspace-connect-form"'));
+    assert.match(html, /id="workspace-connection-alert"[^>]*hidden/);
     if (page === 'interviews') { assert.match(html, /id="create-interview"/); assert.match(html, /id="plan-editor"/); }
     if (page === 'talk') { for (const id of ['start', 'end', 'mute', 'bot-audio', 'retry-save']) assert.match(html, new RegExp(`id="${id}"`)); }
     if (page === 'config') {

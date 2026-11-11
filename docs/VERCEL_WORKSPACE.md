@@ -46,14 +46,15 @@ and the loopback binding.
 
 1. Open `http://127.0.0.1:8000/config` on the same laptop as Chrome.
 2. Under Ops, set **Hosted candidate origin** and **Hosted workspace origin** to
-   `https://voice-agent-one-zeta.vercel.app` (the current production origin), or your
+   `https://voxlaneai.vercel.app` (the current production origin), or your
    actual assigned production origin if you change domains. No trailing slash. Save.
-3. Open the Vercel homepage and click **Connect to local backend**. Allow Chrome
-   local-network/apps-on-device permission if prompted. No code, password, copy/paste
-   or recruiter token is required.
-4. Navigate between dashboard, settings, history and Talk. A tab-scoped `yes` marker
-   remembers a successful connection for navigation/refresh. It carries no authority
-   and is not a credential. **Disconnect this tab** clears that marker and reloads.
+3. Open the Vercel homepage. It connects to the local backend automatically, with no
+   connection panel, code or button needed on a successful visit. Navigation and
+   refresh each attempt connection automatically, including a fresh tab.
+4. If the backend is unavailable or Chrome needs local-network/apps-on-device
+   permission, a compact message and **Retry connection** appear. Start FastAPI,
+   allow the browser permission and retry. Chrome still controls permission; the
+   application does not bypass it. Successful connection hides the message again.
 
 Both origin settings default blank, so hosted access requires explicit local approval.
 Candidate-origin approval alone does not enable management. These are local JSON
@@ -119,7 +120,8 @@ Audio remains fixed at 16000 Hz; providers, observers and session ownership are 
 
 ## Chrome smoke test
 
-1. Start FastAPI, set both origins locally, connect at the hosted homepage and refresh.
+1. Start FastAPI, set both origins locally and open the hosted homepage. Confirm
+   automatic loading with no connection panel, then refresh and open a fresh tab.
 2. Save an ordinary setting on hosted Configuration. Confirm origins are disabled
    there and still managed locally; restore your test setting if needed.
 3. Create/review/activate an interview on Vercel. Open its candidate link and Connect.
@@ -168,3 +170,10 @@ manual Chrome test above.
   the helper preload fix. The responder sent silent test audio, not synthesized speech.
 - No `.env` or private interview records were changed, and these changes were not
   pushed or published automatically.
+
+The automatic-connection revision removes the workspace connection panel and adds
+bootstrap checks for a fresh visit, offline retry and preserving existing page/media
+controls during reconnect. All 94 frontend tests and both builds pass. Isolated
+Chrome checks passed automatic first loading, navigation to all workspace pages,
+refresh, offline guidance and retry recovery, with no provider calls. Existing local
+pages and candidate signaling are unchanged.
