@@ -195,21 +195,27 @@ el('abandon').addEventListener('click', async () => {
   } catch (error) { message(error.message); }
 });
 let clientLoaded = false;
+let loadingInterview = false;
 async function loadInterview() {
+  if (loadingInterview) return;
+  loadingInterview = true;
+  el('retry-backend').hidden = true;
+  el('retry-backend').disabled = true;
+  el('ready-interview').disabled = true;
+  message('');
   try {
     if (!id) throw new Error('Incomplete interview link. Open the full /candidate/<session-id>#token=<token> link supplied by the recruiter.');
     await refresh();
     if (!['completed', 'failed', 'abandoned', 'in_progress'].includes(info.status)) await request('/prepare', 'POST', { phase: 'device_check', camera_consent: false });
     if (!clientLoaded) { await import('./demo.js'); clientLoaded = true; }
-    el('local-backend-connect').hidden = true;
-  } catch (error) { message(`Cannot load this interview: ${error.message}`); }
+  } catch (error) {
+    el('ready-interview').disabled = true;
+    message(`Cannot load this interview: ${error.message}`);
+    el('retry-backend').hidden = !id;
+  } finally {
+    loadingInterview = false;
+    el('retry-backend').disabled = false;
+  }
 }
-if (apiBase) {
-  el('local-backend-connect').hidden = false;
-  el('ready-interview').disabled = true;
-  message('Start FastAPI on this same laptop, then connect below. Allow Chrome’s local network / apps-on-device permission when prompted.');
-  el('connect-backend').addEventListener('click', async () => {
-    el('connect-backend').disabled = true;
-    try { await loadInterview(); } finally { el('connect-backend').disabled = false; }
-  });
-} else await loadInterview();
+el('retry-backend').addEventListener('click', loadInterview);
+await loadInterview();

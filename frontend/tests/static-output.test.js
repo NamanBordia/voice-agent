@@ -10,7 +10,9 @@ test('static candidate shell reuses current UI and exposes no recruiter controls
   const shell = await readFile(new URL('../candidate-shell.html', import.meta.url), 'utf8');
   const html = candidateHtml(template, shell, 'http://127.0.0.1:8000');
   assert.ok(!/{[{%#]/.test(html)); assert.match(html, /data-session-id=""/);
-  for (const id of ['camera-preview', 'bot-audio', 'start', 'mute', 'end', 'abandon', 'camera-consent', 'connect-backend']) assert.match(html, new RegExp(`id="${id}"`));
+  for (const id of ['camera-preview', 'bot-audio', 'start', 'mute', 'end', 'abandon', 'camera-consent', 'retry-backend']) assert.match(html, new RegExp(`id="${id}"`));
+  assert.ok(!html.includes('Connect to this laptop') && !html.includes('id="connect-backend"'));
+  assert.match(html, /id="retry-backend"[^>]*hidden/);
   assert.ok(!html.includes('href="/interviews"')); assert.ok(!html.includes('id="plan-editor"'));
   assert.match(html, /connect-src[^;]*http:\/\/127\.0\.0\.1:8000/);
   assert.ok(!html.includes('upgrade-insecure-requests'));

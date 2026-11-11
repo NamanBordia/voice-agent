@@ -16,7 +16,7 @@ function stream(kind) {
   const track = { kind, readyState: 'live', stop() { this.readyState = 'ended'; } };
   return { track, getTracks: () => [track], getVideoTracks: () => kind === 'video' ? [track] : [] };
 }
-async function page({ consent = true, acquire = async () => stream('video'), eventDelivery = true, hosted = false, unreachable = false } = {}) {
+async function page({ consent = true, acquire = async () => stream('video'), eventDelivery = true, hosted = false, unreachable = false, prepareDevices = true, invalidToken = false } = {}) {
   const elements = {}; const el = (id) => elements[id] ||= new Element();
   el('camera-consent').checked = consent; el('speaker-confirmed').checked = true;
   globalThis.document = { getElementById: el };
@@ -24,8 +24,10 @@ async function page({ consent = true, acquire = async () => stream('video'), eve
   globalThis.history = { replaceState() {} };
   globalThis.sessionStorage = { getItem() { return null; }, setItem() {} };
   const cameras = []; const monitors = []; const requests = []; let videoRequests = 0;
+  let offline = unreachable; let mediaRequests = 0; let clientLoads = 0; let helperLoads = 0;
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaDevices: {
     async getUserMedia(constraints) {
+      mediaRequests++;
       if (!constraints.video) return stream('audio');
       videoRequests += 1;
       const value = await acquire(videoRequests); cameras.push(value); return value;
@@ -40,9 +42,10 @@ async function page({ consent = true, acquire = async () => stream('video'), eve
     camera: { phone_enabled: true }, camera_sequence: 0, heartbeat_sequence: 0, title: 'Intern', language: 'en',
     duration_minutes: 5, remaining_secs: 300 };
   globalThis.fetch = async (path, options) => {
-    if (unreachable) throw new TypeError('Failed to fetch');
+    if (offline) throw new TypeError('Failed to fetch');
     const body = options.body ? JSON.parse(options.body) : undefined;
     requests.push({ path, method: options.method, body, options });
+    if (invalidToken) return Response.json({ detail: 'Invalid or expired candidate link' }, { status: 403 });
     if (path.endsWith('/prepare')) {
       if (server.status !== 'paused') server.status = body.phase;
       return Response.json({ status: server.status });
@@ -54,7 +57,8 @@ async function page({ consent = true, acquire = async () => stream('video'), eve
   globalThis.candidateDeps = {
     createCandidateHeaders, SmallWebRTCTransport: class {}, candidateTransport: (Base) => Base,
     candidateLocation: (...args) => candidateLocation(...args, hosted ? 'http://127.0.0.1:8000' : ''), candidateOfferRequest, fetchCandidate, BACKEND_HELP,
-    Daily: { getCallInstance: () => ({ async load() {} }) },
+    Daily: { getCallInstance: () => ({ async load() { helperLoads++; } }) },
+    noteClientLoad() { clientLoads++; },
     CameraMonitor: class {
       constructor(options) { this.options = options; monitors.push(this); }
       async start(camera, consent) { this.camera = camera; this.consent = consent; }
@@ -63,14 +67,10 @@ async function page({ consent = true, acquire = async () => stream('video'), eve
   };
   const source = (await readFile(new URL('../candidate.js', import.meta.url), 'utf8'))
     .replace(/^import .*;\r?\n/gm, '')
-    .replace("await import('./demo.js');", 'void 0;');
+    .replace("await import('./demo.js');", 'globalThis.candidateDeps.noteClientLoad();');
   const prefix = 'const { CameraMonitor, Daily, createCandidateHeaders, SmallWebRTCTransport, candidateTransport, candidateLocation, candidateOfferRequest, fetchCandidate, BACKEND_HELP } = globalThis.candidateDeps;\n';
   await import(`data:text/javascript;base64,${Buffer.from(`${prefix}${source}\n// case ${moduleId++}`).toString('base64')}`);
-  if (hosted) {
-    assert.equal(requests.length, 0); // No permission-triggering request before an explicit click.
-    await el('connect-backend').handlers.click();
-  }
-  if (!unreachable) { await el('check-mic').handlers.click(); await el('ready-interview').handlers.click(); }
+  if (!unreachable && !invalidToken && prepareDevices) { await el('check-mic').handlers.click(); await el('ready-interview').handlers.click(); }
   const participation = globalThis.interviewParticipation;
   const announce = async (callSid) => {
     server.status = 'in_progress'; server.call_sid = callSid;
@@ -82,7 +82,8 @@ async function page({ consent = true, acquire = async () => stream('video'), eve
     await participation.onEnd();
   };
   return { elements, cameras, monitors, requests, server, participation, announce, pause,
-    videoRequests: () => videoRequests };
+    videoRequests: () => videoRequests, mediaRequests: () => mediaRequests,
+    clientLoads: () => clientLoads, helperLoads: () => helperLoads, setOffline: (value) => { offline = value; } };
 }
 
 test('resume reacquires a fresh camera before monitoring the new call without another preview click', async () => {
@@ -126,9 +127,41 @@ test('hosted candidate uses loopback for preparation, monitoring, consent and en
 test('hosted network failures explain same-device FastAPI and Chrome permission without losing retry', async () => {
   const p = await page({ hosted: true, unreachable: true });
   assert.match(p.elements['preparation-status'].textContent, /Start FastAPI.*same laptop.*Chrome/);
-  assert.equal(p.elements['local-backend-connect'].hidden, false);
-  assert.equal(p.elements['connect-backend'].disabled, false);
+  assert.equal(p.elements['retry-backend'].hidden, false);
+  assert.equal(p.elements['retry-backend'].disabled, false);
   assert.equal(p.elements['ready-interview'].disabled, true);
+});
+
+test('hosted candidate automatically loads the scoped interview without requesting devices or starting voice', async () => {
+  const p = await page({ hosted: true, consent: false, prepareDevices: false });
+  assert.equal(p.elements['interview-title'].textContent, 'Intern');
+  assert.deepEqual(p.requests.map((value) => value.method), ['GET', 'POST']);
+  assert.equal(p.requests[1].body.phase, 'device_check');
+  assert.equal(p.requests[1].body.camera_consent, false);
+  assert.equal(p.mediaRequests(), 0); assert.equal(p.helperLoads(), 0);
+  assert.equal(p.elements['camera-consent'].checked, false);
+  assert.equal(await p.participation.beforeStart(), false);
+  assert.equal(p.elements['retry-backend'].hidden, true);
+  assert.equal(p.clientLoads(), 1);
+});
+
+test('candidate retries a failed automatic connection once without duplicate preparation or client initialization', async () => {
+  const p = await page({ hosted: true, unreachable: true, prepareDevices: false });
+  assert.equal(p.clientLoads(), 0);
+  p.setOffline(false);
+  await Promise.all([p.elements['retry-backend'].handlers.click(), p.elements['retry-backend'].handlers.click()]);
+  assert.deepEqual(p.requests.map((value) => value.method), ['GET', 'POST']);
+  assert.equal(p.elements['retry-backend'].hidden, true);
+  assert.equal(p.elements['preparation-status'].textContent, '');
+  assert.equal(p.clientLoads(), 1); assert.equal(p.mediaRequests(), 0);
+});
+
+test('automatic loading preserves invalid candidate-token errors and leaves preparation disabled', async () => {
+  const p = await page({ hosted: true, invalidToken: true, prepareDevices: false });
+  assert.match(p.elements['preparation-status'].textContent, /Invalid or expired candidate link/);
+  assert.equal(p.requests.length, 1); assert.equal(p.clientLoads(), 0);
+  assert.equal(p.elements['ready-interview'].disabled, true);
+  assert.equal(p.mediaRequests(), 0);
 });
 
 test('candidate event queue returns a verified receipt and preserves identity across failed retries', async () => {

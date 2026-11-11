@@ -5,7 +5,7 @@
 <main id="candidate-root" data-session-id="{{ session_id }}" data-mode="preparation">
   <header class="candidate-heading"><p class="eyebrow">YOUR INTERVIEW</p><h1 id="interview-title">Preparing interview…</h1><p id="interview-info" aria-live="polite"></p><span id="connection-state" class="badge neutral" role="status">Not connected</span></header>
   <p id="preparation-status" class="workspace-message" role="status"></p>
-  <section id="local-backend-connect" class="panel" hidden aria-label="Connect to local FastAPI"><h2>Connect to this laptop</h2><p>FastAPI must be running at <code>http://127.0.0.1:8000</code> on the same device. Allow Chrome’s local network / apps-on-device permission. Your interview token is sent only to that local backend.</p><button id="connect-backend" type="button">Connect to local backend</button></section>
+  <button id="retry-backend" class="secondary" type="button" hidden>Retry connection</button>
   <div class="candidate-layout">
     <section class="panel" id="device-check" aria-labelledby="device-heading">
       <h2 id="device-heading">Before you begin</h2><p class="hint device-intro">Use headphones if possible and choose a quiet space. Answer after the interviewer stops speaking.</p>

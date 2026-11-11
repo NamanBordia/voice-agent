@@ -80,6 +80,11 @@ participation tokens are unchanged and still protect candidate session APIs.
 Create, review/save and activate an interview on the hosted dashboard. Its relative
 candidate URL automatically resolves on the hosted origin. Save the full link
 before leaving. Open it on this same laptop without a recruiter credential.
+The candidate page automatically loads its authorized interview data when FastAPI
+is available. It shows no connection panel or startup instructions on success.
+Only a failed load exposes the error and a compact Retry connection button. Device
+checks, camera consent, preparation and Start interview remain explicit user actions;
+opening the link does not request microphone/camera access or start provider work.
 
 Local links remain local and still work. To open one on Vercel, replace only
 `http://127.0.0.1:8000` with your Vercel origin, keeping the entire
@@ -124,7 +129,8 @@ Audio remains fixed at 16000 Hz; providers, observers and session ownership are 
    automatic loading with no connection panel, then refresh and open a fresh tab.
 2. Save an ordinary setting on hosted Configuration. Confirm origins are disabled
    there and still managed locally; restore your test setting if needed.
-3. Create/review/activate an interview on Vercel. Open its candidate link and Connect.
+3. Create/review/activate an interview on Vercel. Open its candidate link and confirm
+   it loads automatically without a connection panel. Refresh to check token retention.
 4. Allow Chrome network/microphone/camera access. Run microphone/speaker checks,
    preview the camera, choose consent, prepare and start. Hear one question, answer
    after it stops, and hear the next response. Check mic gating during bot speech.
@@ -177,3 +183,10 @@ controls during reconnect. All 94 frontend tests and both builds pass. Isolated
 Chrome checks passed automatic first loading, navigation to all workspace pages,
 refresh, offline guidance and retry recovery, with no provider calls. Existing local
 pages and candidate signaling are unchanged.
+
+The candidate automatic-loading revision also removes its connection panel. All 97
+frontend tests pass, including automatic hosted loading, failed-load retry, unchanged
+invalid-token handling and no automatic device access or voice start. Both builds and
+two template-rendering tests pass. Isolated Chrome checks also passed automatic
+candidate loading with no startup block, refresh/token retention, offline retry and
+invalid-token errors, with zero device requests, runtime errors or provider calls.
