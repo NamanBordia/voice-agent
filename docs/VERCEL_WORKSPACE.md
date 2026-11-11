@@ -24,7 +24,8 @@ Push to the connected production branch (`main` for this project) and let Vercel
 rebuild. Root `vercel.json` supplies static rewrites and security headers. Keep the
 root at the repository root because the build reads existing templates and styles.
 Do not add provider keys to Vercel or enable analytics/session replay for these pages.
-No Functions, API proxies, tunnels or additional dependencies are used.
+No Functions, API proxies or tunnels are used. Face and phone detection share the
+pinned MediaPipe runtime; ONNX Runtime was removed when the YOLO trial was retired.
 
 Only `frontend/dist` is served: six data-free HTML shells, six JS bundles, three
 stylesheets, two vision models and four vision runtime files (**21 files**). The

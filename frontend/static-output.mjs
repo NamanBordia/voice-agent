@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
+import { modelFiles } from './vision-assets.mjs';
 
 export function candidateHtml(template, shell, apiBase) {
   const content = template.match(/{% block content %}([\s\S]*?){% endblock %}/)?.[1];
@@ -41,7 +42,7 @@ export function workspaceHtml(template, shell, apiBase, page) {
 
 export async function auditStaticOutput(directory) {
   const expected = new Set(['index.html', 'candidate.html', 'talk.html', 'config.html', 'calls.html', 'call.html', ...['candidate.js','candidate-view.js','demo.js','recruiter.js','workspace.js','camera-worker.js','base.css','studio.css','talk.css'].map((name) => `static/${name}`),
-    'static/vision/blaze_face_short_range.tflite','static/vision/efficientdet_lite0.tflite',
+    ...modelFiles.map((name) => `static/vision/${name}`),
     ...['vision_wasm_internal.js','vision_wasm_internal.wasm','vision_wasm_nosimd_internal.js','vision_wasm_nosimd_internal.wasm'].map((name) => `static/vision/wasm/${name}`)]);
   const found = [];
   async function visit(path) {

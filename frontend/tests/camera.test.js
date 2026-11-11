@@ -1,9 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ObservationRules } from '../camera-rules.js';
-import { CameraMonitor } from '../camera-monitor.js';
+import { CameraMonitor, analysisBitmap } from '../camera-monitor.js';
 const config = { fps: 4, confidence: .6, absent_secs: 3, multiple_secs: 2, displacement_secs: 3, displacement_ratio: .25, cooldown_secs: 15 };
 const observe = (count, center = { x: .5, y: .5 }, confidence = .9) => ({ count, center, confidence });
+test('analysis capture preserves 4:3, portrait and small camera proportions', async () => {
+  globalThis.createImageBitmap = async (_, options) => options;
+  assert.deepEqual(await analysisBitmap({ videoWidth: 1280, videoHeight: 960 }), { resizeWidth: 640, resizeHeight: 480 });
+  assert.deepEqual(await analysisBitmap({ videoWidth: 480, videoHeight: 640 }), { resizeWidth: 480, resizeHeight: 640 });
+  assert.deepEqual(await analysisBitmap({ videoWidth: 320, videoHeight: 240 }), { resizeWidth: 320, resizeHeight: 240 });
+  assert.throws(() => analysisBitmap({ videoWidth: 0, videoHeight: 0 }), /unavailable/);
+});
 function sustained(rules, observation, start, duration) {
   const events = [];
   for (let t = start; t <= start + duration; t += .25) events.push(...rules.update(observation, t));
@@ -85,6 +92,18 @@ test('a loaded detector reports active only after a valid analyzed frame', async
   s.monitor.stop();
 });
 
+test('an analyzed frame does not disable the five-second deadline for later stalls', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const s = setup(); await s.monitor.start(s.stream, true);
+  s.worker.onmessage({ data: { type: 'ready' } }); clearInterval(s.monitor.timer);
+  await s.monitor.tick(); t.mock.timers.tick(1000);
+  assert.equal(s.monitor.closed, false);
+  s.worker.onmessage({ data: { type: 'result', face: observe(1), phone: null, errors: {} } });
+  assert.equal(s.monitor.frameTimeoutMs, 5000);
+  await s.monitor.tick(); t.mock.timers.tick(5001);
+  assert.equal(s.monitor.closed, true); assert.equal(s.heartbeats.at(-1), 'unavailable');
+});
+
 test('camera frames that never become available yield an unavailable observation', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
   const s = setup(); s.video.readyState = 1;
@@ -149,12 +168,12 @@ test('sustained phone results reach event delivery even when face analysis is un
   s.worker.onmessage({ data: { type: 'ready', detectors: { face: 'unavailable', phone: 'ready' } } });
   for (seconds = 0; seconds <= 2; seconds += .5) {
     await s.monitor.tick();
-    s.worker.onmessage({ data: { type: 'result', face: null, phone: { count: 1, confidence: .9 }, errors: {} } });
+    s.worker.onmessage({ data: { type: 'result', face: null, phone: { count: 1, confidence: .45 }, errors: {} } });
   }
   assert.equal(s.heartbeats.includes('active'), true);
   assert.equal(s.events.length, 1);
   assert.equal(s.events[0].type, 'phone_detected');
-  assert.equal(s.events[0].confidence, .9);
+  assert.equal(s.events[0].confidence, .45);
   assert.equal(s.events[0].duration_secs, 2);
   assert.equal(s.monitor.phoneVisible, true);
   await s.monitor.stop();
@@ -163,7 +182,7 @@ test('sustained phone results reach event delivery even when face analysis is un
 });
 
 test('phone preview shows low scores, strongest candidate and rule resets without uploading diagnostic values', async () => {
-  const s = setup(undefined, { phone_enabled: true });
+  const s = setup(undefined, { phone_enabled: true, phone_confidence: .7 });
   let seconds = 0; s.monitor.seconds = () => seconds;
   await s.monitor.start(s.stream, true);
   s.worker.onmessage({ data: { type: 'ready', detectors: { face: 'ready', phone: 'ready' } } });

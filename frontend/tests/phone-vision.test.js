@@ -65,19 +65,23 @@ async function worker({ phoneLoadFails = false, phoneInferenceFails = false, pho
   globalThis.OffscreenCanvas = class {};
   globalThis.self = { postMessage(data) { outputs.push(data); }, close() {} };
   const source = (await readFile(new URL('../camera-worker.js', import.meta.url), 'utf8'))
-    .replace(/^import .*;\r?\n/, 'const { FaceDetector, ObjectDetector, FilesetResolver } = globalThis.testVision;\n');
-  await import(`data:text/javascript;base64,${Buffer.from(`${source}\n// worker ${moduleId++}`).toString('base64')}`);
+    .replace(/^import .*;\r?\n/gm, '');
+  const dependencies = 'const { FaceDetector, FilesetResolver, ObjectDetector } = globalThis.testVision;\n';
+  await import(`data:text/javascript;base64,${Buffer.from(`${dependencies}${source}\n// worker ${moduleId++}`).toString('base64')}`);
   return { outputs, options, message: (data) => self.onmessage({ data }),
     counts: () => ({ faceCalls, phoneCalls, faceClosed, phoneClosed }) };
 }
 
-test('actual worker uses local CPU models, phone allowlist and slower phone cadence', async () => {
+test('actual worker uses local CPU models, the phone allowlist and a slower phone cadence', async () => {
   const w = await worker(); let closed = 0;
   await w.message({ type: 'init', confidence: .6, ...config });
-  assert.deepEqual(w.options[1].categoryAllowlist, ['cell phone']);
   assert.equal(w.options[1].scoreThreshold, .3);
+  assert.deepEqual(w.options[1].categoryAllowlist, ['cell phone']);
+  assert.match(w.options[1].baseOptions.modelAssetPath, /\/efficientdet_lite0\.tflite$/);
   assert.equal(w.options[1].baseOptions.delegate, 'CPU');
-  assert.match(w.options[1].baseOptions.modelAssetPath, /^\/static\/vision\//);
+  assert.equal(w.options[0].baseOptions.delegate, 'CPU');
+  assert.match(w.options[0].baseOptions.modelAssetPath, /^\/static\/vision\//);
+  assert.equal(w.outputs.at(-1).phone_backend, 'EfficientDet-Lite0 / CPU');
   for (const timestamp of [0, 250, 500]) await w.message({ type: 'frame', timestamp, bitmap: { width: 640, height: 360, close() { closed += 1; } } });
   assert.equal(w.counts().faceCalls, 3); assert.equal(w.counts().phoneCalls, 2); assert.equal(closed, 3);
   assert.equal(w.outputs.at(-1).phone.count, 1); assert.equal(w.outputs.at(-1).phone.confidence, .85);

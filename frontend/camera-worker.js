@@ -5,9 +5,8 @@ self.onmessage = async ({ data }) => {
     const detectors = { face: 'unavailable', phone: data.phone_enabled ? 'unavailable' : 'disabled' };
     const errors = {};
     let files;
-    try { files = await FilesetResolver.forVisionTasks('/static/vision/wasm'); }
-    catch { self.postMessage({ type: 'ready', detectors, errors: { face: 'model_load_failed', phone: 'model_load_failed' } }); return; }
     try {
+      files = await FilesetResolver.forVisionTasks('/static/vision/wasm');
       face = await FaceDetector.createFromOptions(files, {
         baseOptions: { modelAssetPath: '/static/vision/blaze_face_short_range.tflite', delegate: 'CPU' },
         canvas: new OffscreenCanvas(640, 360), runningMode: 'VIDEO',
@@ -18,17 +17,17 @@ self.onmessage = async ({ data }) => {
     if (data.phone_enabled) {
       phonePeriod = 1000 / data.phone_fps;
       try {
+        // Diagnostic candidates stay local; PhoneRules applies the saved threshold.
+        files ||= await FilesetResolver.forVisionTasks('/static/vision/wasm');
         phone = await ObjectDetector.createFromOptions(files, {
           baseOptions: { modelAssetPath: '/static/vision/efficientdet_lite0.tflite', delegate: 'CPU' },
           canvas: new OffscreenCanvas(320, 320), runningMode: 'VIDEO',
-          // Keep weaker candidates locally for diagnosis. PhoneRules still applies
-          // the recruiter's event threshold before anything can be reported.
           categoryAllowlist: ['cell phone'], scoreThreshold: Math.min(.3, data.phone_confidence), maxResults: 5,
         });
         detectors.phone = 'ready';
       } catch { errors.phone = 'model_load_failed'; }
     }
-    self.postMessage({ type: 'ready', detectors, errors }); return;
+    self.postMessage({ type: 'ready', detectors, errors, phone_backend: phone ? 'EfficientDet-Lite0 / CPU' : undefined }); return;
   }
   if (data.type === 'frame') {
     const result = { type: 'result', face: null, phone: null, errors: {} };

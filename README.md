@@ -32,6 +32,11 @@ Use Python 3.11+ and Node 22.14+ for the initial browser build. Node is not need
    review a plan, activate its candidate link, and complete the device checks.
    See [the interview workflow](docs/INTERVIEWS.md) for camera setup, reports, and recovery.
 
+Phone monitoring uses EfficientDet-Lite0 and faces use BlazeFace through local
+MediaPipe inference. The YOLO trial was retired after processing gaps affected face
+coverage. Detection accuracy still requires a real-camera check; see the
+[interview workflow](docs/INTERVIEWS.md).
+
 The agent listens after the greeting and between replies. Headphones help avoid echo.
 End waits for cleanup and reports whether the conversation was saved. If saving takes longer
 or a write fails, use Retry saving; cleanup continues while the server stays open.

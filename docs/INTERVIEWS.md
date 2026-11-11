@@ -29,11 +29,13 @@ generated WASM/JS are ignored by Git and must be prepared on another checkout.
 Vision runtime uses same-origin assets only. Missing model/unsupported worker capabilities
 produce visible `monitoring_unavailable`; voice participation remains available.
 
-`prepare:vision` also verifies the approved EfficientDet-Lite0 **int8 version 1**
-phone model (`efficientdet_lite0.tflite`), SHA-256
+`prepare:vision` also verifies EfficientDet-Lite0 **int8 version 1**
+(`efficientdet_lite0.tflite`), SHA-256
 `0720bf247bd76e6594ea28fa9c6f7c5242be774818997dbbeffc4da460c723bb`.
-Its embedded category metadata includes `cell phone`. Both model files are local
-generated assets and must be prepared on another checkout.
+Its category metadata includes `cell phone`. Both models use the existing pinned
+MediaPipe runtime. Generated assets must be prepared on a new checkout.
+The user requested this return from YOLO after slow inference reduced face coverage;
+see the [retired trial record](YOLO_PHONE_TRIAL.md). No ONNX runtime is required.
 
 Open [Interview workspace](http://localhost:8000/interviews). Enter role details,
 skills, topics, criteria, experience, duration, language, and optional pasted resume.
@@ -203,12 +205,12 @@ To use phone detection, create a new interview and enable **local mobile-phone
 detection** under Local camera settings before drafting/activation. It defaults off
 for compatibility with existing definitions. The candidate sees whether it is enabled
 and must explicitly consent to local face/phone analysis and metadata delivery.
-Only the `cell phone` category is allowed; books, other objects, screen content and
+Only the COCO `cell phone` category is allowed; books, other objects, screen content and
 phone use/intent are outside this feature. The report labels sightings **Possible
 phone detections — human review**; model scores are not calibrated probabilities.
 
-The same CPU worker analyzes faces at the configured camera cadence and phones at
-2 fps by default. Phone settings (score threshold .7, sustained observation 2 seconds,
+The same browser worker analyzes faces at the configured camera cadence and phones at
+2 fps by default. Phone settings (score threshold .4, sustained observation 2 seconds,
 cooldown 15 seconds) are recruiter-editable in the immutable job snapshot. Low scores,
 missing observations and long inference gaps reset a pending phone event. Phone
 model/inference exceptions are isolated from face analysis where possible. A stalled
@@ -236,20 +238,27 @@ Face Detector in a dedicated worker uses CPU delegate and VIDEO mode with all
 detections retained. It does not cap detection at one face. Its setup follows
 [Google's web guide](https://developers.google.com/edge/mediapipe/solutions/vision/face_detector/web_js)
 and [official model documentation](https://developers.google.com/edge/mediapipe/solutions/vision/face_detector).
-Default analysis is 4 fps at 640×360. One transferred ImageBitmap is in flight;
+Face analysis targets 4 fps with proportional frames up to a 640-pixel edge.
+One transferred ImageBitmap is in flight;
 busy frames are skipped. The worker closes each bitmap. End, pause, failure, and
 page cleanup terminate workers, stop tracks, clear timers, and detach preview.
 Capability/model/inference failures and stalled results produce explicit unavailable
 status. This MVP omits orientation, recognition, recording, and avatars.
-Optional phone detection uses the locally hosted EfficientDet Lite0 model in the
-same worker. Enable it in recruiter camera settings before creating the candidate
-link. Defaults require a model score of 0.7 sustained for 2 seconds; sightings are
+Optional phone detection uses locally hosted EfficientDet-Lite0 through MediaPipe's
+CPU delegate in the same worker. The preview identifies `EfficientDet-Lite0 / CPU`
+so a person can confirm which build is running. Actual throughput and phone
+recognition still need validation on the target laptop.
+Enable it in recruiter camera settings before creating the candidate
+link. Defaults require a model score of 0.4 sustained for 2 seconds; sightings are
 neutral review events, not conclusions about use or misconduct. The preview reports
 possible visible phones so a person can check lighting, framing and sustained visibility.
 For troubleshooting, the worker retains phone candidates down to score 0.3 locally;
 the configured recruiter threshold still gates every report event. The preview shows
 the latest/best phone score, event threshold, sighting progress, timer resets,
 event creation count and separately acknowledged saved/unconfirmed delivery counts.
+The lower default threshold improves sensitivity but can increase false sightings;
+it requires validation with the actual camera. Existing interview definitions retain
+their saved thresholds; use a newly created interview to try the new default.
 These extra diagnostics are not sent in heartbeats or persisted. A queued event is
 confirmed saved only after the server acknowledges it; failures remain visible
 through subsequent frame updates.

@@ -6,6 +6,7 @@ The application is a single-user local browser voice agent with SmallWebRTC and 
 |---|---|
 | [ARCHITECTURE](ARCHITECTURE.md) | Components, pipeline, readiness, and cleanup ownership. |
 | [Interviews](INTERVIEWS.md) | Recruiter setup, candidate workflow, camera privacy, recovery, reports, and manual checks. |
+| [Retired YOLO phone trial](YOLO_PHONE_TRIAL.md) | Historical trial findings and return to EfficientDet-Lite0. |
 | [Interview system explained](INTERVIEW_SYSTEM_EXPLAINED.md) | Presentation guide: complete workflow, component connections, speech/vision models, data flow, reports and prototype limitations. |
 | [UI redesign](UI_REDESIGN.md) | Indigo/slate presentation update, files, verification and manual review boundaries. |
 | [Vercel full frontend](VERCEL_WORKSPACE.md) | Hosted recruiter/candidate pages, exact-origin loopback access, deployment settings and Chrome smoke test. |

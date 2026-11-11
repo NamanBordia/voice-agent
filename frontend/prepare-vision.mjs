@@ -13,12 +13,19 @@ for (const asset of models) {
   let bytes;
   try { bytes = await readFile(model); } catch {}
   if (!bytes || digest(bytes) !== asset.sha) {
-    const response = await fetch(`https://storage.googleapis.com/mediapipe-models/${asset.path}`, { signal: AbortSignal.timeout(60000) });
-    if (!response.ok) throw new Error(`Model download failed: ${response.status}`);
-    bytes = Buffer.from(await response.arrayBuffer());
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const response = await fetch(`https://storage.googleapis.com/mediapipe-models/${asset.path}`, { signal: AbortSignal.timeout(60000) });
+        if (!response.ok) throw new Error(`Model download failed: ${response.status}`);
+        bytes = Buffer.from(await response.arrayBuffer()); break;
+      } catch (error) {
+        if (attempt === 2) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+      }
+    }
     if (digest(bytes) !== asset.sha) throw new Error('Model checksum mismatch; asset was not installed.');
     const temporary = new URL(`${asset.name}.tmp`, directory);
     await writeFile(temporary, bytes); await rename(temporary, model);
   }
-  console.log(`Local ${asset.name} version 1 verified (SHA-256).`);
+  console.log(`Pinned local ${asset.name} verified (SHA-256).`);
 }

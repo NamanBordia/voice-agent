@@ -1,6 +1,6 @@
 # AI Interview System: Complete Workflow and Architecture
 
-This guide describes the implemented local-development prototype as of October 29, 2026. It is intended for a project presentation and explains the workflow, models, component connections, data handling, and current limitations.
+This guide describes the implemented local-development prototype, updated November 12, 2026 after returning phone detection to EfficientDet-Lite0. It is intended for a project presentation and explains the workflow, models, component connections, data handling, and current limitations.
 
 ## 1. Project overview
 
@@ -50,15 +50,18 @@ These are the configured models at the time of writing. Voice settings are snaps
 | Interview decision model | Cerebras-hosted `qwen-3.8-27b` | Propose answer assessments, clarification and follow-ups | External Cerebras API |
 | Text-to-speech | Sarvam `bulbul:v3`, configured voice `shubh` | Convert interviewer text into spoken audio | External Sarvam API |
 | Voice activity analysis | `SileroVADAnalyzer` | Supply local speech activity/timing signals used by the pipeline and latency observers | Local server |
-| Vision runtime | `@mediapipe/tasks-vision` version `0.10.32`, WebAssembly, CPU delegate | Execute face and object models | Candidate browser worker |
+| Face runtime | `@mediapipe/tasks-vision` version `0.10.32`, WebAssembly, CPU delegate | Execute face model | Candidate browser worker |
+| Phone runtime | `@mediapipe/tasks-vision` version `0.10.32`, WebAssembly, CPU delegate | Execute phone model | Candidate browser worker |
 | Face model | BlazeFace short-range, float16, version 1 | Detect faces and their positions | Candidate browser worker |
-| Phone model | EfficientDet-Lite0, int8, version 1 | Detect the allowed `cell phone` category | Candidate browser worker |
+| Phone model | EfficientDet-Lite0 int8, version 1 | Detect the allowed `cell phone` category | Candidate browser worker |
 | Persistence | Typed, versioned JSON files | Save definitions, progress, reports and conversation logs | Local server disk |
 | Readable report summary | Browser JavaScript | Summarize existing saved evidence | Recruiter browser |
 
 The configured LLM uses `reasoning_effort: none`. Interview decisions are requested as structured JSON and validated before use. The configured model identifier is recorded here from the project settings; this guide does not independently verify the provider's model architecture.
 
-MediaPipe is the vision execution library. BlazeFace and EfficientDet-Lite0 are the actual detection models.
+MediaPipe is the vision execution library. BlazeFace and EfficientDet-Lite0 are the
+current detection models. The [retired YOLO trial](YOLO_PHONE_TRIAL.md) records why
+the project returned to the lighter detector; this is not proof of phone accuracy.
 
 ## 4. Recruiter setup and plan review
 
@@ -218,15 +221,21 @@ This is face detection. It does not verify identity, recognize a registered cand
 
 ### Phone detection
 
-The worker loads `efficientdet_lite0.tflite`: **EfficientDet-Lite0, int8, version 1**. It runs through MediaPipe Object Detector using the CPU delegate. Its category allowlist contains only `cell phone`.
+The worker loads `efficientdet_lite0.tflite`: **EfficientDet-Lite0 int8, version 1**,
+through MediaPipe Object Detector with the CPU delegate and only the `cell phone`
+category enabled. Face and phone results remain separate observations.
 
 The current feature is therefore limited to possible mobile phones. It does not flag arbitrary suspicious objects or infer whether a visible phone is being used.
 
-Both models and the pinned MediaPipe WASM assets are served locally. Setup downloads the model files and checks their expected SHA-256 hashes; runtime camera inference does not call an external vision API.
+Both models and their pinned runtime assets are served from the frontend origin.
+Inference runs locally in the browser. Setup downloads the model files and checks
+their expected SHA-256 hashes; camera inference does not call an external vision API.
 
 ### Cadence and performance
 
-Face analysis defaults to 4 frames per second, using a 640-by-360 processing path. Phone analysis defaults to 2 frames per second in the same worker, with a 320-by-320 detector canvas.
+Face analysis targets 4 frames per second with proportional images up to a 640-pixel
+edge. Phone analysis targets 2 frames per second in the same worker, with the
+model's 320-by-320 input handled by MediaPipe. These are targets, not speed guarantees.
 
 These are target cadences, not guaranteed throughput. Only one frame is in flight at a time. If inference is busy, frames are skipped instead of building an increasing backlog. Transferred bitmaps are closed after processing.
 
@@ -246,7 +255,7 @@ Factory defaults are listed below. Recruiter settings are saved with each activa
 | Position-change duration | 3 seconds |
 | Face event cooldown | 15 seconds per event type |
 | Phone detection enabled | Off until the recruiter enables it |
-| Phone event score threshold | 0.70 |
+| Phone event score threshold | 0.40 |
 | Phone sustained observation span | 2 seconds |
 | Phone event cooldown | 15 seconds |
 

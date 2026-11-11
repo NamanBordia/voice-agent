@@ -2,15 +2,24 @@ import { ObservationRules } from './camera-rules.js';
 import { PhoneRules } from './phone-rules.js';
 import { VisionSummary } from './vision-summary.js';
 
+/** Capture proportional frames even when webcam constraints were only approximate. */
+export function analysisBitmap(video) {
+  const { videoWidth: width, videoHeight: height } = video;
+  if (!width || !height) throw new Error('Camera frame unavailable');
+  const scale = Math.min(1, 640 / Math.max(width, height));
+  return createImageBitmap(video, { resizeWidth: Math.max(1, Math.round(width * scale)), resizeHeight: Math.max(1, Math.round(height * scale)) });
+}
+
 export class CameraMonitor {
-  constructor({ video, config, send, heartbeat, status, elapsed = 0, callSid, run, workerFactory = () => new Worker('/static/camera-worker.js'), bitmapFactory = (source) => createImageBitmap(source, { resizeWidth: 640, resizeHeight: 360 }) }) {
+  constructor({ video, config, send, heartbeat, status, elapsed = 0, callSid, run, workerFactory = () => new Worker('/static/camera-worker.js'), bitmapFactory = analysisBitmap }) {
     Object.assign(this, { video, send, heartbeat, status, elapsed, callSid, run, workerFactory, bitmapFactory });
-    this.config = { phone_enabled: false, phone_fps: 2, phone_confidence: .7, phone_sustain_secs: 2, phone_cooldown_secs: 15, ...config };
+    this.config = { phone_enabled: false, phone_fps: 2, phone_confidence: .4, phone_sustain_secs: 2, phone_cooldown_secs: 15, ...config };
     this.rules = new ObservationRules(this.config); this.phoneRules = new PhoneRules(this.config); this.worker = null; this.stream = null;
     this.busy = false; this.ready = false; this.closed = false; this.timer = null; this.watchdog = null;
     this.heartbeatTimer = null; this.startedAt = 0; this.monitoring = 'not_started';
     this.bestPhoneScore = null; this.lastPhoneScore = null;
     this.phoneEventsSaved = 0; this.phoneEventsUnconfirmed = 0;
+    this.frameTimeoutMs = 5000;
   }
   seconds() { return this.elapsed + (performance.now() - this.startedAt) / 1000; }
   emit(status) {
@@ -27,7 +36,7 @@ export class CameraMonitor {
     if (this.summary.run.phone.status === 'active') {
       const score = this.lastPhoneScore === null ? 'none' : this.lastPhoneScore.toFixed(2);
       const best = this.bestPhoneScore === null ? 'none' : this.bestPhoneScore.toFixed(2);
-      phoneDetails = ` Phone score: ${score}; best: ${best}; event threshold: ${this.config.phone_confidence.toFixed(2)}. ${this.phoneRules.describe()} Phone events saved: ${this.phoneEventsSaved}; delivery unconfirmed: ${this.phoneEventsUnconfirmed}.`;
+      phoneDetails = ` Phone score: ${score}; best: ${best}; event threshold: ${this.config.phone_confidence.toFixed(2)}. ${this.phoneRules.describe()} Phone events saved: ${this.phoneEventsSaved}; delivery unconfirmed: ${this.phoneEventsUnconfirmed}.${this.phoneBackend ? ` Detector: ${this.phoneBackend}.` : ''}`;
     }
     this.status(`Face: ${label('face')}. Phone: ${label('phone')}.${phoneDetails} Images remain on this device.`);
   }
@@ -55,6 +64,7 @@ export class CameraMonitor {
         if (this.closed) return;
         if (data.type === 'ready') {
           if (this.ready) return;
+          this.phoneBackend = data.phone_backend === 'EfficientDet-Lite0 / CPU' ? data.phone_backend : null;
           this.available = { face: (data.detectors?.face || 'ready') === 'ready', phone: data.detectors?.phone === 'ready' };
           for (const name of ['face', 'phone']) {
             if (!this.available[name]) this.summary.failure(name, 'model_load_failed', this.seconds());
@@ -63,9 +73,9 @@ export class CameraMonitor {
           clearTimeout(this.watchdog); this.ready = true; this.lastResultAt = performance.now();
           this.showStatus();
           if (this.config.phone_enabled && !this.available.phone) void this.emit('not_started');
-          this.watchdog = setTimeout(() => this.fail('monitoring_unavailable', 'frame_timeout'), 5000);
+          this.watchdog = setTimeout(() => this.fail('monitoring_unavailable', 'frame_timeout'), this.frameTimeoutMs);
           this.heartbeatTimer = setInterval(() => {
-            if (performance.now() - this.lastResultAt > 5000) this.fail('monitoring_unavailable', 'frame_timeout');
+            if (performance.now() - this.lastResultAt > this.frameTimeoutMs) this.fail('monitoring_unavailable', 'frame_timeout');
             else void this.emit(this.monitoring);
           }, 10000);
           this.timer = setInterval(() => void this.tick(), 1000 / this.config.fps);
@@ -99,9 +109,9 @@ export class CameraMonitor {
           }
           if (!this.available.face && !this.available.phone) { this.fail('monitoring_unavailable', 'inference_failed'); return; }
           clearTimeout(this.watchdog); this.busy = false;
-          if (face || phone) this.lastResultAt = performance.now();
+          if (face || phone) { this.lastResultAt = performance.now(); this.frameTimeoutMs = 5000; }
           this.monitoring = ['face', 'phone'].some((name) => this.summary.run[name].status === 'active') ? 'active' : 'unavailable';
-          this.watchdog = setTimeout(() => this.fail('monitoring_unavailable', 'frame_timeout'), 5000);
+          this.watchdog = setTimeout(() => this.fail('monitoring_unavailable', 'frame_timeout'), this.frameTimeoutMs);
           this.showStatus();
           if (this.monitoring !== previous || Object.keys(data.errors || {}).length) void this.emit(this.monitoring);
         } else this.fail('monitoring_unavailable', 'worker_error');
@@ -118,7 +128,7 @@ export class CameraMonitor {
     this.busy = true; let bitmap;
     // Covers both stalled bitmap creation and stalled detector inference.
     clearTimeout(this.watchdog);
-    this.watchdog = setTimeout(() => this.fail('monitoring_unavailable', 'frame_timeout'), 5000);
+    this.watchdog = setTimeout(() => this.fail('monitoring_unavailable', 'frame_timeout'), this.frameTimeoutMs);
     try {
       bitmap = await this.bitmapFactory(this.video);
       if (this.closed || !this.worker) { bitmap.close(); this.busy = false; return; }

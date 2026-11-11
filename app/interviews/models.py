@@ -27,7 +27,7 @@ class CameraConfig(Record):
     cooldown_secs: float = Field(default=15, ge=5, le=120)
     phone_enabled: bool = False
     phone_fps: float = Field(default=2, ge=.5, le=3)
-    phone_confidence: float = Field(default=.7, ge=.3, le=1)
+    phone_confidence: float = Field(default=.4, ge=.3, le=1)
     phone_sustain_secs: float = Field(default=2, ge=1, le=30)
     phone_cooldown_secs: float = Field(default=15, ge=5, le=120)
 

@@ -9,7 +9,8 @@
     "prepare:vision": "node prepare-vision.mjs",
     "build": "node build.mjs",
     "build:static": "node build-static.mjs",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "test:vision-browser": "node verify-vision-browser.mjs"
   },
   "dependencies": {
     "@daily-co/daily-js": "0.90.0",
