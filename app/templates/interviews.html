@@ -2,11 +2,12 @@
 {% block title %}Voice Agent — Interview workspace{% endblock %}
 {% block head %}<script type="module" src="/static/recruiter.js"></script>{% endblock %}
 {% block content %}
+<p id="workspace-status" class="workspace-message" role="status" aria-live="polite"></p>
+<div id="interview-dashboard" hidden>
 <header class="page-heading">
   <div><p class="eyebrow">RECRUITER WORKSPACE</p><h1>Interviews</h1><p>Create thoughtful interviews. Review the evidence in one place.</p></div>
   <button id="create-interview" type="button"><span aria-hidden="true">＋</span> Create interview</button>
 </header>
-<p id="workspace-status" class="workspace-message" role="status" aria-live="polite"></p>
 <section class="panel" aria-labelledby="saved-heading">
   <div class="section-heading"><div><h2 id="saved-heading">Your interviews</h2><p class="hint">Saved plans and candidate sessions on this computer.</p></div><button id="refresh" class="secondary" type="button">Refresh list</button></div>
   <div class="section-heading"><div class="search-field"><label for="interview-search">Search interviews by role, skill, language or status</label><input id="interview-search" type="search" placeholder="Search interviews…" autocomplete="off"></div><p id="list-count" class="hint" role="status"></p></div>
@@ -55,11 +56,25 @@
     </section>
   </div><aside class="builder-outline" aria-label="Interview outline"><p class="eyebrow">PLAN AT A GLANCE</p><h3 id="outline-title">Your interview outline</h3><p id="outline-meta" class="hint">A draft will show your actual sections and time budgets here.</p><ol id="plan-outline"></ol><p class="hint">Review questions and evidence criteria before activation. Camera observations never affect technical assessment.</p></aside></div>
 </section>
-<section class="panel report-panel" id="report-panel" aria-labelledby="report-heading" hidden>
-  <p class="eyebrow">RECRUITER REPORT</p><h2 id="report-heading">Interview findings</h2><p id="report-overview"></p>
-  <nav class="report-nav" aria-label="Report sections"><a href="#report-summary">Overview &amp; findings</a><a href="#report-transcript">Transcript &amp; evidence</a><a href="#report-camera">Camera observations</a><a href="#report-issues">Technical issues</a><a href="#report-diagnostics">Raw diagnostics</a><a href="#human-review">Human review</a></nav>
-  <section id="report-summary" aria-label="Plain-English interview summary"></section><div id="report-readable" class="report-readable"></div>
-  <details id="report-diagnostics"><summary>Advanced · raw report diagnostics</summary><div id="report-content"></div></details>
-  <section id="human-review"><h2>Human review</h2><p class="hint">Review transcript evidence and any technical uncertainty before recording your decision.</p><label>Recruiter notes<textarea id="recruiter-notes"></textarea></label><label>Human decision<input id="human-decision" placeholder="Your decision; no automated hiring recommendation"></label><button id="save-review" type="button">Save human review</button></section>
+</div>
+<section id="report-page" hidden aria-label="Interview report">
+  <div class="report-toolbar"><a href="/interviews" class="report-back">← All interviews</a><div class="actions"><button id="reload-report" class="secondary" type="button">Refresh report</button><button id="print-report" class="secondary" type="button" disabled>Print / save PDF</button></div></div>
+  <header class="report-header"><div><p class="eyebrow">INTERVIEW REPORT</p><h1 id="report-heading">Loading interview report…</h1><p id="report-overview" class="muted"></p></div><span id="report-state" class="badge neutral"></span></header>
+  <div id="report-panel" class="report-panel" hidden>
+    <div id="report-highlights" class="report-highlights" aria-label="Report at a glance"></div>
+    <div class="report-layout">
+      <nav class="report-nav" aria-label="Report sections">
+        <a id="nav-report-summary" href="#report-summary" aria-current="page">Overview</a><a id="nav-report-transcript" href="#report-transcript">Answers &amp; evidence</a><a id="nav-report-camera" href="#report-camera">Camera observations</a><a id="nav-report-issues" href="#report-issues">Issues &amp; uncertainty</a><a id="nav-human-review" href="#human-review">Human review</a><a id="nav-report-diagnostics" href="#report-diagnostics">Raw diagnostics</a>
+      </nav>
+      <div class="report-sections">
+        <section id="report-summary" class="report-pane" aria-label="Report overview"></section>
+        <section id="report-transcript" class="report-pane" aria-label="Answers and evidence" hidden></section>
+        <section id="report-camera" class="report-pane" aria-label="Camera observations" hidden></section>
+        <section id="report-issues" class="report-pane" aria-label="Technical issues and uncertainty" hidden></section>
+        <section id="human-review" class="report-pane" hidden><div class="report-card"><p class="eyebrow">RECRUITER REVIEW</p><h2>Your notes and decision</h2><p class="muted">Review the answers and any uncertainty before recording your decision.</p><label for="recruiter-notes">Recruiter notes</label><textarea id="recruiter-notes" placeholder="Record the evidence you reviewed and any follow-up needed."></textarea><label for="human-decision">Human decision</label><input id="human-decision" placeholder="Your decision; no automated hiring recommendation"><div class="actions"><button id="save-review" type="button" disabled>Save human review</button></div><p id="review-status" role="status" aria-live="polite" class="hint"></p></div></section>
+        <section id="report-diagnostics" class="report-pane" hidden><div class="report-card"><h2>Raw diagnostics</h2><p class="muted">Original saved evidence and monitoring metadata for detailed review.</p><details><summary>Show raw report diagnostics</summary><div id="report-content"></div></details></div></section>
+      </div>
+    </div>
+  </div>
 </section>
 {% endblock %}

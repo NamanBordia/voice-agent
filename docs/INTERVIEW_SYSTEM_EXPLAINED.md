@@ -313,6 +313,11 @@ The session is authoritative, and its report can be reconstructed. This design s
 
 The report includes interview status, active duration, reviewed plan, asked questions, accepted transcripts, criterion evidence, skill coverage, missing evidence, uncertainty, technical issues, a separate camera timeline, monitoring coverage and human-owned notes/decision fields.
 
+The interview list opens reports in a separate tab at `/interviews?report=<session_id>`.
+The report has an overview with section-rating cards and dedicated answer, camera,
+issue and human-review sections. Raw diagnostics stay collapsed. Refresh retains
+the selected report and section; the original interview list and draft stay open.
+
 ### Criterion ratings
 
 | Rating | Meaning |
@@ -359,6 +364,7 @@ Phone findings never change technical ratings. The report does not calculate a v
 | `frontend/camera-rules.js` | Sustained face-observation rules |
 | `frontend/phone-rules.js` | Sustained phone-sighting rules |
 | `frontend/report-summary.js` | Readable report derived from saved evidence |
+| `frontend/interview-report.js` | Structured report cards, answer evidence and camera timeline |
 
 ## 15. Local and cloud boundaries
 

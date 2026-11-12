@@ -301,12 +301,25 @@ No automatic rejection or hiring recommendation is generated. Recruiter reports 
 reviewed rubrics, actual excerpts and answer IDs, missing evidence, uncertainty,
 technical issues, a separate camera timeline, and human-owned notes/decision fields.
 
-### Plain-English report summary
+### Separate report view and plain-English summary
 
-Below the detailed JSON report, the recruiter page displays a readable section-rating
-table, criterion reasons, phone-sighting result/timestamps, face observations and
-technical issues. It derives these from the existing report in the browser, with no
-extra LLM call, route or persisted record. Existing saved interviews also receive it.
+The interview list's **Open report ↗** link opens a separate tab using
+`/interviews?report=<session_id>`. The original list, search and unsaved plan stay
+in their existing tab. Local FastAPI and the hosted frontend reuse the existing
+page route and authorized report/review APIs; opening a report never uses a candidate
+token. Refresh and direct navigation retain the selected report.
+
+The report view starts with active-time, response, reviewed-criterion and technical-note
+cards. Its navigation separates Overview, Answers & evidence, Camera observations,
+Issues & uncertainty, Human review and Raw diagnostics. Overview shows section-rating
+cards and expandable criterion reasons, with links to the cited answer. Camera
+observations show phone/face coverage and a readable event timeline. Raw JSON stays
+collapsed in its own section. Notes and decisions save through the existing review
+API, with a visible save result and retained text on failure. Print / save PDF formats
+the readable report sections without the diagnostic dumps or editable review form.
+
+All summaries derive from existing report data in the browser, with no extra LLM
+call, public route or persisted record. Existing saved interviews also receive the view.
 
 For each question/criterion, use the strongest usable saved assessment across answers
 and follow-ups. Positive ratings require an exact accepted-answer excerpt. Requests,

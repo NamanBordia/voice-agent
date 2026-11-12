@@ -23,21 +23,30 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 const sourceDefinition = () => ({ id: 'original', reviewed: true,
   job: { title: 'API developer', language: 'en', duration_minutes: 20 },
   plan: { sections: [{ questions: [{ text: 'A custom reviewed question?' }] }] } });
+const emptyReport = () => ({ role: 'Engineer', language: 'en', status: 'completed', duration_secs: 60,
+  topics: [], skills: [], uncertainty: 'Review the original evidence.', reviewed_plan: { sections: [] },
+  missing_evidence: [], answers: [], questions: [], technical_issues: [], camera_notice: 'Unverified observations',
+  monitoring: { status: 'not_started', runs: [] }, camera_events: [], recruiter_notes: 'Saved note', human_decision: '' });
 
-async function page({ activated = true, failActivation = false, gateActivation = null, report = null, formEntries = [] } = {}) {
+async function page({ activated = true, failActivation = false, gateActivation = null, report = null,
+  reportQuery = report ? 'existing-session' : null, failReport = false, failReview = false, formEntries = [] } = {}) {
   const original = sourceDefinition();
   const definitions = [structuredClone(original)];
   const sessions = activated ? [{ id: 'existing-session', definition_id: original.id, status: 'paused' }] : [];
   const requests = [];
   const elements = {};
   const el = (id) => elements[id] ||= new Element();
-  globalThis.document = { getElementById: el, createElement: () => new Element() };
-  globalThis.location = { origin: 'http://localhost:8000' };
+  globalThis.document = { getElementById: el, createElement: () => new Element(), body: { classList: { toggle() {} } } };
+  globalThis.location = { origin: 'http://localhost:8000', search: reportQuery === null ? '' : `?report=${encodeURIComponent(reportQuery)}`, hash: '' };
+  el('report-panel').hidden = true; el('save-review').disabled = true; el('print-report').disabled = true;
   globalThis.FormData = class extends Map { constructor() { super(formEntries); } };
   globalThis.fetch = async (path, options) => {
     const method = options.method; const body = options.body && JSON.parse(options.body);
     requests.push({ path, method, body });
-    if (path === '/api/interviews/sessions/existing-session/report') return Response.json(report);
+    if (path === '/api/interviews/sessions/existing-session/report') return failReport
+      ? Response.json({ detail: 'Report was not found' }, { status: 404 }) : Response.json(report);
+    if (path === '/api/interviews/sessions/existing-session/review' && method === 'PUT') return failReview
+      ? Response.json({ detail: 'Review could not be saved' }, { status: 503 }) : Response.json({ saved: true });
     if (path === '/api/interviews' && method === 'GET') return Response.json({ definitions, sessions });
     if (path === '/api/interviews' && method === 'POST') {
       const copy = { id: 'copy', reviewed: false, job: body, plan: { sections: [] } };
@@ -59,7 +68,7 @@ async function page({ activated = true, failActivation = false, gateActivation =
     assert.fail(`Unexpected request: ${method} ${path}`);
   };
   const source = (await readFile(new URL('../recruiter.js', import.meta.url), 'utf8'))
-    .replace("'./report-summary.js'", JSON.stringify(new URL('../report-summary.js', import.meta.url).href));
+    .replace("'./interview-report.js'", JSON.stringify(new URL('../interview-report.js', import.meta.url).href));
   await import(`data:text/javascript;base64,${Buffer.from(`${source}\n// case ${moduleId++}`).toString('base64')}`);
   await settle();
   const select = async (index = 0) => { await elements['interview-list'].children[index].children[0].children[0].handlers.click(); };
@@ -78,6 +87,52 @@ test('previously activated interviews show their status and cannot send review/a
   await elements['review-plan'].handlers.click();
   await elements['activate-plan'].handlers.click();
   assert.equal(requests.filter((request) => request.method !== 'GET').length, 0);
+});
+
+test('report links open a separate tab and do not load or reveal an inline report in the list', async () => {
+  const p = await page(); const link = p.elements['interview-list'].children[0].children[4].children[0].children[1];
+  assert.equal(link.href, 'http://localhost:8000/interviews?report=existing-session');
+  assert.equal(link.target, '_blank'); assert.equal(link.rel, 'noopener noreferrer');
+  assert.match(link.attributes['aria-label'], /new tab/);
+  assert.equal(p.elements['report-page'].hidden, true); assert.equal(p.elements['interview-dashboard'].hidden, false);
+  assert.equal(p.requests.some(({ path }) => path.endsWith('/report')), false);
+});
+
+test('a report opens directly without loading the interview list and switches between focused sections', async () => {
+  const p = await page({ report: emptyReport() });
+  assert.equal(p.elements['interview-dashboard'].hidden, true); assert.equal(p.elements['report-page'].hidden, false);
+  assert.deepEqual(p.requests.map(({ path }) => path), ['/api/interviews/sessions/existing-session/report']);
+  assert.equal(p.elements['report-heading'].textContent, 'Engineer');
+  assert.equal(p.elements['report-summary'].hidden, false); assert.equal(p.elements['report-transcript'].hidden, true);
+  p.elements['nav-report-camera'].handlers.click();
+  assert.equal(p.elements['report-camera'].hidden, false); assert.equal(p.elements['report-summary'].hidden, true);
+  assert.equal(p.elements['nav-report-camera'].attributes['aria-current'], 'page');
+  assert.equal(p.elements['print-report'].disabled, false);
+  assert.equal(p.elements['report-content'].children.every((section) => !section.open), true);
+});
+
+test('missing and invalid report links show an error without enabling edits or loading the list', async () => {
+  const missing = await page({ report: emptyReport(), failReport: true });
+  assert.equal(missing.elements['report-heading'].textContent, 'Report unavailable');
+  assert.equal(missing.elements['report-panel'].hidden, true); assert.equal(missing.elements['save-review'].disabled, true);
+  assert.match(missing.elements['workspace-status'].textContent, /not found/);
+  assert.equal(missing.requests.length, 1);
+  const invalid = await page({ reportQuery: '../another-record' });
+  assert.match(invalid.elements['workspace-status'].textContent, /Invalid report link/); assert.equal(invalid.requests.length, 0);
+});
+
+test('report review saves to the selected session and retains notes when saving fails', async () => {
+  for (const failReview of [false, true]) {
+    const p = await page({ report: emptyReport(), failReview });
+    assert.equal(p.elements['recruiter-notes'].value, 'Saved note');
+    p.elements['recruiter-notes'].value = 'Reviewed transcript'; p.elements['human-decision'].value = 'Follow up';
+    await p.elements['save-review'].handlers.click();
+    const write = p.requests.find(({ method }) => method === 'PUT');
+    assert.equal(write.path, '/api/interviews/sessions/existing-session/review');
+    assert.deepEqual(write.body, { recruiter_notes: 'Reviewed transcript', human_decision: 'Follow up' });
+    assert.equal(p.elements['recruiter-notes'].value, 'Reviewed transcript'); assert.equal(p.elements['save-review'].disabled, false);
+    assert.match(p.elements['review-status'].textContent, failReview ? /could not be saved/ : /review saved/);
+  }
 });
 
 test('copying an activated plan requires review, then creates a fresh link while preserving the original', async () => {
@@ -139,7 +194,6 @@ test('recruiter report distinguishes technical omissions from weak answers and e
     questions: [], technical_issues: [], camera_notice: 'Unverified observations',
     monitoring: { status: 'unavailable' }, camera_events: [], recruiter_notes: '', human_decision: '' };
   const { elements } = await page({ report });
-  await elements['interview-list'].children[0].children[4].children[0].children[1].handlers.click();
   const sections = elements['report-content'].children;
   const interruptions = sections.find((section) => section.children[0].textContent === 'Assessments needing human review');
   assert.match(interruptions.children[1].textContent, /separate from a candidate providing insufficient evidence/);
@@ -159,7 +213,6 @@ test('report totals count cumulative runs once and label phone events for human 
       { call_sid: 'c2', start_secs: 3, observed_until_secs: 5, face: metrics, phone: metrics }] },
     camera_events: [{ type: 'phone_detected', start_secs: 1, duration_secs: 2, confidence: .85 }], recruiter_notes: '', human_decision: '' };
   const { elements } = await page({ report });
-  await elements['interview-list'].children[0].children[4].children[0].children[1].handlers.click();
   const sections = elements['report-content'].children;
   const coverage = sections.find((section) => section.children[0].textContent === 'Video analysis coverage').children[1].textContent;
   assert.match(coverage, /"reported_frames_analyzed": 8/);
@@ -170,8 +223,8 @@ test('report totals count cumulative runs once and label phone events for human 
   assert.match(phones, /"model_score": 0.85/);
   const plainText = (node) => [node.textContent || '', ...(node.children || []).map(plainText)].join(' ');
   const summary = plainText(elements['report-summary']);
-  assert.match(summary, /Plain-English interview summary/);
-  assert.match(summary, /Mobile phone: possible sighting recorded/);
+  assert.match(summary, /Section ratings/);
+  assert.match(summary, /possible sighting recorded/);
   assert.match(summary, /At 0:01, spanning 2.0 seconds/);
 });
 

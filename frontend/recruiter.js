@@ -1,8 +1,13 @@
-import { renderReportSummary } from './report-summary.js';
+import { renderInterviewReport } from './interview-report.js';
 
 const el = (id) => document.getElementById(id);
 let definition = null;
 let reportId = null;
+let reportLoading = false;
+let reviewSaving = false;
+const reportQuery = new URLSearchParams(location.search || '');
+const reportMode = reportQuery.has('report');
+const reportSections = ['report-summary', 'report-transcript', 'report-camera', 'report-issues', 'human-review', 'report-diagnostics'];
 let sessions = [];
 let planBusy = false;
 let planEdited = false;
@@ -140,7 +145,11 @@ function renderList() {
     const actions = node('td'); const group = node('div', '', 'row-actions');
     group.append(button('Open plan', () => { if (!planBusy) select(value); }));
     for (const session of related) {
-      group.append(button(`Report: ${session.status}`, () => showReport(session.id)));
+      const link = node('a', 'Open report ↗', 'report-open-link');
+      const url = new URL('/interviews', location.origin); url.searchParams.set('report', session.id);
+      link.href = url.href; link.target = '_blank'; link.rel = 'noopener noreferrer';
+      link.setAttribute('aria-label', `Open report for ${value.job.title} (${session.status}) in a new tab`);
+      group.append(link);
     }
     actions.append(group); row.append(role, skillCell, node('td', `${value.job.duration_minutes} min`), state, actions);
     el('interview-list').append(row);
@@ -152,85 +161,79 @@ function renderList() {
   }
 }
 function block(title, text) {
-  const section = document.createElement('details'); section.open = true;
+  const section = document.createElement('details');
   const heading = document.createElement('summary'); heading.textContent = title;
   const content = document.createElement('pre'); content.textContent = text;
   section.append(heading, content); el('report-content').append(section);
 }
 async function showReport(id) {
-  status('Loading interview report…', 'loading');
-  const report = await request(`/api/interviews/sessions/${id}/report`); reportId = id;
-  el('report-panel').hidden = false;
-  el('report-overview').textContent = `${report.role} · ${report.language} · ${report.status} · ${(report.duration_secs / 60).toFixed(1)} active minutes`;
-  el('report-content').replaceChildren();
-  block('Coverage and uncertainty', JSON.stringify({ topics: report.topics, skills: report.skills, uncertainty: report.uncertainty }, null, 2));
-  const technicalIds = new Set(report.reviewed_plan.sections.filter((section) => section.kind === 'technical').flatMap((section) => section.questions.map((question) => question.id)));
-  const technicalTurns = report.answers.filter((answer) => technicalIds.has(answer.question_id) && answer.technical_issue);
-  if (technicalTurns.length) block('Assessments needing human review',
-    'These transcripts were retained. Technical interruptions or discarded evidence can leave an assessment incomplete; this is separate from a candidate providing insufficient evidence.\n\n' +
-    JSON.stringify(technicalTurns.map((answer) => ({ turn: answer.event_id, question: answer.question_id,
-      issue: answer.technical_issue, retained_criteria: answer.evidence.map((item) => item.criterion) })), null, 2));
-  block('Defined rubric', JSON.stringify(report.rubric, null, 2));
-  block('Reviewed question criteria and missing evidence', JSON.stringify({ plan: report.reviewed_plan, missing_evidence: report.missing_evidence }, null, 2));
-  for (const answer of report.answers) block(`Turn ${answer.event_id} · ${answer.kind} · ${answer.question_id}`, `${answer.prompt}\n\nCandidate: ${answer.text}\n\n${JSON.stringify({ evidence: answer.evidence, technical_issue: answer.technical_issue, action: answer.action }, null, 2)}`);
-  block('Questions and follow-ups', JSON.stringify(report.questions, null, 2));
-  block('Technical and possible transcription issues', JSON.stringify(report.technical_issues, null, 2));
-  const monitoringNote = report.monitoring.status === 'unavailable'
-    ? 'Monitoring was unavailable or updates stopped arriving. Its observations are incomplete.'
-    : report.monitoring.status === 'not_started'
-      ? 'No analysis was confirmed for this session.'
-      : 'This is the latest reported monitoring status; it does not establish continuous coverage.';
-  const runs = report.monitoring.runs || [];
-  if (runs.length) {
-    const totals = {};
-    const intervals = runs.filter((run) => Number.isFinite(run.start_secs) && Number.isFinite(run.observed_until_secs))
-      .map((run) => [Math.max(0, run.start_secs), Math.min(report.duration_secs, run.observed_until_secs)])
-      .filter(([start, end]) => end >= start).sort((a, b) => a[0] - b[0]);
-    let accounted = 0; let previousEnd = 0;
-    for (const [start, end] of intervals) { accounted += Math.max(0, end - Math.max(start, previousEnd)); previousEnd = Math.max(previousEnd, end); }
-    totals.interview_active_secs = report.duration_secs;
-    totals.time_outside_monitoring_runs_secs = Math.max(0, report.duration_secs - accounted);
-    for (const name of ['face', 'phone']) {
-      const enabled = runs.filter((run) => run[name].enabled);
-      const first = enabled.map((run) => run[name].first_analyzed_secs).filter((value) => value !== null);
-      const last = enabled.map((run) => run[name].last_analyzed_secs).filter((value) => value !== null);
-      totals[name] = { enabled_runs: enabled.length, reported_frames_analyzed: enabled.reduce((sum, run) => sum + run[name].frames_analyzed, 0),
-        reported_covered_secs: enabled.reduce((sum, run) => sum + run[name].covered_secs, 0),
-        unknown_or_unavailable_secs: enabled.reduce((sum, run) => sum + run[name].unknown_secs, 0),
-        first_analyzed_secs: first.length ? Math.min(...first) : null, last_analyzed_secs: last.length ? Math.max(...last) : null };
-    }
-    block('Video analysis coverage', `Browser-reported metadata, not independent verification. Unknown time is never counted as successful coverage. Time outside monitoring runs is also unverified. Disabled detectors have no analysis claim.\n\n${JSON.stringify(totals, null, 2)}\n\nRuns and interruptions:\n${JSON.stringify(runs, null, 2)}`);
-  } else block('Video analysis coverage', 'Unknown. This record has no detector-frame or coverage summaries; an empty event list is inconclusive.');
-  const phones = report.camera_events.filter((event) => event.type === 'phone_detected');
-  block('Possible phone detections — human review', `These are possible visible-object sightings, not evidence of phone use or misconduct. Model scores are not calibrated probabilities. Duration describes the observation span; an isolated missed sample may occur within it.\n\n${JSON.stringify(phones.map((event) => ({ start_secs: event.start_secs, duration_secs: event.duration_secs, model_score: event.confidence })), null, 2)}`);
-  block('Separate camera timeline', `${report.camera_notice}\n\n${monitoringNote}\n${report.camera_events.length ? '' : 'No camera events were saved. This alone does not confirm that detection worked throughout.'}\n\n${JSON.stringify({ monitoring: report.monitoring, events: report.camera_events }, null, 2)}`);
-  renderReportSummary(report, el('report-summary'));
-  renderReadableReport(report);
-  el('recruiter-notes').value = report.recruiter_notes; el('human-decision').value = report.human_decision;
-  el('report-panel').scrollIntoView({ behavior: 'smooth' });
-  status('Report loaded. Review transcript evidence and technical uncertainty before making a decision.');
+  if (reportLoading) return;
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(id || '')) throw new Error('Invalid report link. Open a report from the interview list.');
+  reportLoading = true; el('reload-report').disabled = true;
+  try {
+    status('Loading interview report…', 'loading');
+    const report = await request(`/api/interviews/sessions/${encodeURIComponent(id)}/report`); reportId = id;
+    el('report-panel').hidden = false;
+    el('report-heading').textContent = report.role || 'Interview report'; document.title = `${report.role || 'Interview'} — Report · Voice Agent`;
+    el('report-overview').textContent = `${report.language.toUpperCase()} · Interview evidence and observations`;
+    el('report-state').textContent = report.status.replaceAll('_', ' ');
+    el('report-content').replaceChildren();
+    block('Coverage and uncertainty', JSON.stringify({ topics: report.topics, skills: report.skills, uncertainty: report.uncertainty }, null, 2));
+    const technicalIds = new Set(report.reviewed_plan.sections.filter((section) => section.kind === 'technical').flatMap((section) => section.questions.map((question) => question.id)));
+    const technicalTurns = report.answers.filter((answer) => technicalIds.has(answer.question_id) && answer.technical_issue);
+    if (technicalTurns.length) block('Assessments needing human review',
+      'These transcripts were retained. Technical interruptions or discarded evidence can leave an assessment incomplete; this is separate from a candidate providing insufficient evidence.\n\n' +
+      JSON.stringify(technicalTurns.map((answer) => ({ turn: answer.event_id, question: answer.question_id,
+        issue: answer.technical_issue, retained_criteria: answer.evidence.map((item) => item.criterion) })), null, 2));
+    block('Defined rubric', JSON.stringify(report.rubric, null, 2));
+    block('Reviewed question criteria and missing evidence', JSON.stringify({ plan: report.reviewed_plan, missing_evidence: report.missing_evidence }, null, 2));
+    for (const answer of report.answers) block(`Turn ${answer.event_id} · ${answer.kind} · ${answer.question_id}`, `${answer.prompt}\n\nCandidate: ${answer.text}\n\n${JSON.stringify({ evidence: answer.evidence, technical_issue: answer.technical_issue, action: answer.action }, null, 2)}`);
+    block('Questions and follow-ups', JSON.stringify(report.questions, null, 2));
+    block('Technical and possible transcription issues', JSON.stringify(report.technical_issues, null, 2));
+    const monitoringNote = report.monitoring.status === 'unavailable'
+      ? 'Monitoring was unavailable or updates stopped arriving. Its observations are incomplete.'
+      : report.monitoring.status === 'not_started'
+        ? 'No analysis was confirmed for this session.'
+        : 'This is the latest reported monitoring status; it does not establish continuous coverage.';
+    const runs = report.monitoring.runs || [];
+    if (runs.length) {
+      const totals = {};
+      const intervals = runs.filter((run) => Number.isFinite(run.start_secs) && Number.isFinite(run.observed_until_secs))
+        .map((run) => [Math.max(0, run.start_secs), Math.min(report.duration_secs, run.observed_until_secs)])
+        .filter(([start, end]) => end >= start).sort((a, b) => a[0] - b[0]);
+      let accounted = 0; let previousEnd = 0;
+      for (const [start, end] of intervals) { accounted += Math.max(0, end - Math.max(start, previousEnd)); previousEnd = Math.max(previousEnd, end); }
+      totals.interview_active_secs = report.duration_secs;
+      totals.time_outside_monitoring_runs_secs = Math.max(0, report.duration_secs - accounted);
+      for (const name of ['face', 'phone']) {
+        const enabled = runs.filter((run) => run[name].enabled);
+        const first = enabled.map((run) => run[name].first_analyzed_secs).filter((value) => value !== null);
+        const last = enabled.map((run) => run[name].last_analyzed_secs).filter((value) => value !== null);
+        totals[name] = { enabled_runs: enabled.length, reported_frames_analyzed: enabled.reduce((sum, run) => sum + run[name].frames_analyzed, 0),
+          reported_covered_secs: enabled.reduce((sum, run) => sum + run[name].covered_secs, 0),
+          unknown_or_unavailable_secs: enabled.reduce((sum, run) => sum + run[name].unknown_secs, 0),
+          first_analyzed_secs: first.length ? Math.min(...first) : null, last_analyzed_secs: last.length ? Math.max(...last) : null };
+      }
+      block('Video analysis coverage', `Browser-reported metadata, not independent verification. Unknown time is never counted as successful coverage. Time outside monitoring runs is also unverified. Disabled detectors have no analysis claim.\n\n${JSON.stringify(totals, null, 2)}\n\nRuns and interruptions:\n${JSON.stringify(runs, null, 2)}`);
+    } else block('Video analysis coverage', 'Unknown. This record has no detector-frame or coverage summaries; an empty event list is inconclusive.');
+    const phones = report.camera_events.filter((event) => event.type === 'phone_detected');
+    block('Possible phone detections — human review', `These are possible visible-object sightings, not evidence of phone use or misconduct. Model scores are not calibrated probabilities. Duration describes the observation span; an isolated missed sample may occur within it.\n\n${JSON.stringify(phones.map((event) => ({ start_secs: event.start_secs, duration_secs: event.duration_secs, model_score: event.confidence })), null, 2)}`);
+    block('Separate camera timeline', `${report.camera_notice}\n\n${monitoringNote}\n${report.camera_events.length ? '' : 'No camera events were saved. This alone does not confirm that detection worked throughout.'}\n\n${JSON.stringify({ monitoring: report.monitoring, events: report.camera_events }, null, 2)}`);
+    renderInterviewReport(report, el);
+    el('recruiter-notes').value = report.recruiter_notes; el('human-decision').value = report.human_decision;
+    el('save-review').disabled = false; el('print-report').disabled = false;
+    showReportSection(); status('');
+  } finally { reportLoading = false; el('reload-report').disabled = false; }
 }
-function renderReadableReport(report) {
-  const target = el('report-readable'); target.replaceChildren();
-  const transcript = node('section'); transcript.id = 'report-transcript'; transcript.append(node('h2', 'Transcript & answer evidence'));
-  for (const answer of report.answers) {
-    const card = node('article', '', 'answer-card');
-    card.append(node('p', `Turn ${answer.event_id} · ${answer.kind} · ${answer.question_id}`, 'eyebrow'), node('h3', answer.prompt), node('p', answer.text));
-    for (const evidence of answer.evidence) {
-      const item = node('div'); item.append(node('strong', `${evidence.criterion} · ${evidence.rating}`), node('p', evidence.justification || ''));
-      if (evidence.excerpt) item.append(node('blockquote', evidence.excerpt)); card.append(item);
-    }
-    if (answer.technical_issue) card.append(node('p', answer.technical_issue, 'technical-note'));
-    transcript.append(card);
+function showReportSection(hash = location.hash || '') {
+  const answer = /^#answer-\d+$/.test(hash) ? hash.slice(1) : null;
+  const section = answer ? 'report-transcript' : reportSections.includes(hash.slice(1)) ? hash.slice(1) : 'report-summary';
+  for (const name of reportSections) {
+    el(name).hidden = name !== section;
+    if (name === section) el(`nav-${name}`).setAttribute('aria-current', 'page');
+    else el(`nav-${name}`).removeAttribute('aria-current');
   }
-  if (!report.answers.length) transcript.append(node('p', 'No accepted answers were recorded.', 'muted'));
-  const camera = node('section'); camera.id = 'report-camera'; camera.append(node('h2', 'Camera observations — separate from assessment'), node('p', report.camera_notice, 'hint'));
-  const events = node('ul');
-  for (const event of report.camera_events) events.append(node('li', `${event.type.replaceAll('_', ' ')} · ${Number(event.start_secs).toFixed(1)}s · observation span ${Number(event.duration_secs).toFixed(1)}s`));
-  camera.append(report.camera_events.length ? events : node('p', 'No camera events were saved. This does not establish that no phone was present or that monitoring was continuous.', 'muted'));
-  const issues = node('section'); issues.id = 'report-issues'; issues.append(node('h2', 'Technical issues & uncertainty'), node('p', report.uncertainty));
-  const list = node('ul'); for (const issue of report.technical_issues) list.append(node('li', issue));
-  issues.append(list); target.append(transcript, camera, issues);
+  if (answer) { el(answer)?.scrollIntoView({ block: 'center' }); el(answer)?.focus({ preventScroll: true }); }
 }
 el('job-form').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -284,7 +287,22 @@ el('continue-share').addEventListener('click', () => showStep('share'));
 el('interview-search').addEventListener('input', renderList);
 el('refresh').addEventListener('click', () => refresh().catch((e) => status(e.message, 'error')));
 el('save-review').addEventListener('click', async () => {
-  try { await request(`/api/interviews/sessions/${reportId}/review`, 'PUT', { recruiter_notes: el('recruiter-notes').value, human_decision: el('human-decision').value }); status('Human review saved.'); }
-  catch (error) { status(error.message, 'error'); }
+  if (!reportId || reviewSaving) return;
+  reviewSaving = true; el('save-review').disabled = true; el('review-status').textContent = 'Saving review…';
+  try { await request(`/api/interviews/sessions/${reportId}/review`, 'PUT', { recruiter_notes: el('recruiter-notes').value, human_decision: el('human-decision').value }); el('review-status').textContent = 'Human review saved.'; }
+  catch (error) { el('review-status').textContent = error.message; }
+  finally { reviewSaving = false; el('save-review').disabled = false; }
 });
-refresh().catch((error) => status(error.message, 'error'));
+el('interview-dashboard').hidden = reportMode;
+el('report-page').hidden = !reportMode;
+document.body.classList.toggle('report-page', reportMode);
+if (reportMode) {
+  const load = () => showReport(reportQuery.get('report')).catch((error) => {
+    if (!reportId) el('report-heading').textContent = 'Report unavailable'; status(error.message, 'error');
+  });
+  for (const name of reportSections) el(`nav-${name}`).addEventListener('click', () => showReportSection(`#${name}`));
+  globalThis.addEventListener?.('hashchange', () => showReportSection());
+  el('reload-report').addEventListener('click', load);
+  el('print-report').addEventListener('click', () => globalThis.print());
+  void load();
+} else refresh().catch((error) => status(error.message, 'error'));

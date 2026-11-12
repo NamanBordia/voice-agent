@@ -72,6 +72,7 @@ participation tokens are unchanged and still protect candidate session APIs.
 | Hosted path | Interface |
 |---|---|
 | `/` or `/interviews` | Recruiter builder, reviewed plans and reports |
+| `/interviews?report=<session_id>` | Separate recruiter report tab, using the same page and authorized APIs |
 | `/talk` | Existing open-ended voice demo |
 | `/config` | Runtime behavior settings |
 | `/calls` | Local saved conversation history |

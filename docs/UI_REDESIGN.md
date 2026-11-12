@@ -2,6 +2,28 @@
 
 Implemented October 30, 2026 as a presentation-layer update to the existing Jinja/plain-JavaScript application.
 
+## November 12: separate recruiter report view
+
+**Open report ↗** now opens `/interviews?report=<session_id>` in a separate tab.
+The report hides the builder/list and presents an overview, answer evidence, camera
+coverage/timeline, issues, human review and collapsed diagnostics in individual
+sections. Direct links and refresh retain the report and active section; criterion
+links open the cited response. Native links use `noopener noreferrer`, keeping the
+original list and unsaved draft independent. Both local and Vercel views reuse the
+existing page route and report/review APIs. No dependency, backend or record change.
+
+`frontend/interview-report.js` renders text nodes from existing summary logic and
+saved evidence. It adds no scoring, media capture or provider calls. The page keeps
+notes on failed saves and offers a print view of the readable report. Responsive
+cards and navigation support narrow screens; raw JSON stays collapsed.
+
+Verification: 103 frontend tests, 2 template tests, and both builds passed. Isolated Chrome used
+synthetic records with the real FastAPI report/review APIs to verify an actual new
+tab, retained original search/draft, hosted/local direct links, refresh, section
+navigation, escaped candidate content, saved review persistence, 390px layout,
+print visibility and a missing-report error. No speech/LLM provider calls occurred.
+Synthetic desktop/mobile screenshots are in ignored `scratch/workspace-hosted/`.
+
 ## Visual changes
 
 - Shared indigo/slate tokens, local system typography, light surfaces, 8px cards, visible keyboard focus and responsive navigation under the existing Voice Agent name.
